@@ -1,5 +1,5 @@
-root_path = '/home/TomKerby/Research/local_corex_private/scripts/mnist_classifier/model_output'
-rep = 3
+root_path = '/yunity/tkerby2/Local_CorEx/Local_CorEx_Experiments/experiments/paper_neural_networks/mnist_classifier/model_output'
+rep = 5
 
 conf = dict(
     classifier = dict(
@@ -7,14 +7,14 @@ conf = dict(
         bs = 32,
         num_workers = 47,
         hidden_layers = [500, 400, 300],
-        drop_out_p = 0.3,
+        drop_out_p = 0.5,
         save_path = root_path + f'/do_classifier/rep_{rep}',
         patience = 10,
         use_batch_norm = True,
         no_act_1st_layer = False,
         logger = dict(
             # name = 'tb_logs',
-            version = f'bs_128_lr_5em4_3_do_5_bn_T_act_mlp_{rep}'
+            version = f'bs_128_lr_5em4_3_do_5_bn_T_{rep}'
         ),
         trainer = dict(
             devices = 4,
@@ -23,9 +23,9 @@ conf = dict(
             strategy = 'ddp', #'ddp_find_unused_parameters_true',
             refresh_rate = 50
         ),
-        start_with_init_weights = False,
-        save_initial_weights = True,
-        save_initial_weights_path = root_path + '/replicates/clf_weights_hs_200_bn_T_mlp_{rep}.pth'
+        start_with_init_weights = True,
+        save_initial_weights = False,
+        save_initial_weights_path = root_path + f'/replicates/clf_weights_hs_300_bn_T_mlp_{rep}.pth'
     ),
     autoencoder = dict(
         lr = 2e-3,
@@ -39,7 +39,7 @@ conf = dict(
         use_batch_norm = True,
         logger = dict(
             # name = 'tb_logs',
-            version = f'ae_bs_128_lr_2em3_hs_200_{rep}'
+            version = f'ae_bs_128_lr_2em3_hs_300_{rep}'
         ),
         trainer = dict(
             devices = 4,
@@ -48,6 +48,6 @@ conf = dict(
             strategy = 'ddp',
             refresh_rate = 50
         ),
-        load_classifier_path = root_path + f'/do_classifier/rep_{rep}/mnist_clf_epoch=053-val_loss=0.0024.ckpt'
+        load_classifier_path = root_path + f'/do_classifier/rep_{rep}/mnist_clf_epoch=096-val_loss=0.0029.ckpt'
     )
 )
