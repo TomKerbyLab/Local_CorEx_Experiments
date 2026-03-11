@@ -237,11 +237,11 @@ class DeepDreamer:
                         oy = int(torch.randint(-jitter, jitter + 1, (1,), device=self.device).item())
                         x_j = _jitter_roll(x, ox, oy)
                     else:
-                        ox = oy = 0
+                        # ox = oy = 0
                         x_j = x
 
-                    acts.clear()
-                    self.model.zero_grad(set_to_none=True)
+                    # acts.clear()
+                    # self.model.zero_grad(set_to_none=True)
 
                     xin = self.preprocess(x_j)
                     _ = self.model(xin)
@@ -259,11 +259,6 @@ class DeepDreamer:
                         x.add_(-step_size * g)  # because grad is for loss=-score
                         x.clamp_(*clamp_range)
                         x.grad.zero_()
-
-                    # Un-jitter (roll back)
-                    if jitter > 0:
-                        with torch.no_grad():
-                            x.copy_(_jitter_roll(x, -ox, -oy))
 
                 # Update detail for next octave
                 with torch.no_grad():
