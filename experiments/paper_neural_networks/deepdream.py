@@ -55,6 +55,19 @@ def _apply_selection(act: torch.Tensor, spec: TargetSpec) -> torch.Tensor:
     x = act
 
     if spec.channels is not None:
+        if x.ndim < 2:
+            raise ValueError(
+                f"Expected activation for layer '{spec.layer}' to have at least 2 dims, got shape {tuple(x.shape)}"
+            )
+
+        num_channels = x.shape[1]
+        invalid_channels = [channel for channel in spec.channels if channel < 0 or channel >= num_channels]
+        if invalid_channels:
+            raise ValueError(
+                f"Layer '{spec.layer}' has {num_channels} channels, but received invalid channel indices "
+                f"{invalid_channels[:10]}."
+            )
+
         ch = torch.tensor(spec.channels, device=x.device, dtype=torch.long)
         x = x.index_select(dim=1, index=ch)
 
@@ -88,7 +101,16 @@ def build_objective(specs: List[TargetSpec]) -> Callable[[Dict[str, torch.Tensor
             act = acts[spec.layer]
             selected = _apply_selection(act, spec)
 
-            if spec.objective.lower() == "l2":
+            obj = spec.objective.lower()
+
+            if obj in ["relu_l2", "relu2"]:
+                selected = F.relu(selected)
+                obj = "l2"
+            elif obj in ["relu_mean", "relumean"]:
+                selected = F.relu(selected)
+                obj = "mean"
+
+            if obj == "l2":
                 # Weighted nodes case: channels selected and node_weights provided
                 if spec.channels is not None and spec.node_weights is not None:
                     w = torch.tensor(spec.node_weights, device=selected.device, dtype=selected.dtype)
@@ -111,7 +133,7 @@ def build_objective(specs: List[TargetSpec]) -> Callable[[Dict[str, torch.Tensor
                 else:
                     score = (selected ** 2).mean()
 
-            elif spec.objective.lower() == "mean":
+            elif obj == "mean":
                 if spec.channels is not None and spec.node_weights is not None:
                     w = torch.tensor(spec.node_weights, device=selected.device, dtype=selected.dtype)
                     if selected.ndim == 4:
@@ -240,7 +262,7 @@ class DeepDreamer:
                         # ox = oy = 0
                         x_j = x
 
-                    # acts.clear()
+                    acts.clear()
                     # self.model.zero_grad(set_to_none=True)
 
                     xin = self.preprocess(x_j)
@@ -283,7 +305,14 @@ def dream_images_and_plot(
     cols=4,
     figsize_scale=4,
     show_original_above=False,
+    grayscale=False,
+    save_path=None,
 ):
+    """
+    grayscale=True: keeps images as single-channel (L mode). Use for models that
+    expect flat grayscale input (e.g. MNIST MLP). Also set octaves=1 and
+    resize=None so the spatial dimensions stay fixed.
+    """
     dreamed_images = []
     original_images = []
 
@@ -291,13 +320,21 @@ def dream_images_and_plot(
         if not isinstance(img, Image.Image):
             raise TypeError("All elements in images must be PIL.Image.Image objects")
 
-        rgb_img = img.convert("RGB")
+        if grayscale:
+            proc_img = img.convert("L")
+        else:
+            proc_img = img.convert("RGB")
         if resize is not None:
-            rgb_img = rgb_img.resize(resize)
-        original_images.append(rgb_img)
+            proc_img = proc_img.resize(resize)
+        original_images.append(proc_img)
 
-        x = torch.from_numpy(np.array(rgb_img)).float() / 255.0
-        x = x.permute(2, 0, 1).unsqueeze(0)
+        arr = np.array(proc_img).astype(np.float32) / 255.0
+        if grayscale:
+            # (H, W) -> (1, 1, H, W)
+            x = torch.from_numpy(arr).unsqueeze(0).unsqueeze(0)
+        else:
+            # (H, W, 3) -> (1, 3, H, W)
+            x = torch.from_numpy(arr).permute(2, 0, 1).unsqueeze(0)
 
         out = dreamer.dream(
             image=x,
@@ -309,10 +346,14 @@ def dream_images_and_plot(
             octave_scale=octave_scale,
         )
 
-        out_img = (
-            out.squeeze(0).permute(1, 2, 0).detach().cpu().numpy() * 255.0
-        ).astype(np.uint8)
-        dreamed_images.append(Image.fromarray(out_img))
+        if grayscale:
+            out_img = (out.squeeze().detach().cpu().numpy() * 255.0).astype(np.uint8)
+            dreamed_images.append(Image.fromarray(out_img, mode="L"))
+        else:
+            out_img = (
+                out.squeeze(0).permute(1, 2, 0).detach().cpu().numpy() * 255.0
+            ).astype(np.uint8)
+            dreamed_images.append(Image.fromarray(out_img))
 
     if len(dreamed_images) == 0:
         raise ValueError("images must contain at least one image")
@@ -335,11 +376,17 @@ def dream_images_and_plot(
             ax_original = axes[2 * r, c]
             ax_dream = axes[2 * r + 1, c]
 
-            ax_original.imshow(original_images[idx])
+            if grayscale:
+                ax_original.imshow(original_images[idx], cmap="gray", vmin=0, vmax=255)
+            else:
+                ax_original.imshow(original_images[idx])
             ax_original.set_title(f"Original {idx + 1}")
             ax_original.axis("off")
 
-            ax_dream.imshow(dreamed_images[idx])
+            if grayscale:
+                ax_dream.imshow(dreamed_images[idx], cmap="gray", vmin=0, vmax=255)
+            else:
+                ax_dream.imshow(dreamed_images[idx])
             ax_dream.set_title(f"Dream {idx + 1}")
             ax_dream.axis("off")
 
@@ -358,13 +405,18 @@ def dream_images_and_plot(
 
         for idx, ax in enumerate(axes):
             if idx < len(dreamed_images):
-                ax.imshow(dreamed_images[idx])
+                if grayscale:
+                    ax.imshow(dreamed_images[idx], cmap="gray", vmin=0, vmax=255)
+                else:
+                    ax.imshow(dreamed_images[idx])
                 ax.set_title(f"Dream {idx + 1}")
                 ax.axis("off")
             else:
                 ax.axis("off")
 
     plt.tight_layout()
+    if save_path is not None:
+        fig.savefig(save_path, bbox_inches="tight")
     plt.show()
 
     return dreamed_images

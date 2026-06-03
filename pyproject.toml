@@ -4,10 +4,14 @@ version = "0.1.0"
 description = "Experiment notebooks and scripts that depend on the local-corex package"
 requires-python = ">=3.9,<3.13"
 dependencies = [
-    "local-corex @ git+https://github.com/TomKerbyLab/Local_CorEx.git",
+    "local-corex",
     "jupyter",
     "matplotlib",
     "pandas",
     "numpy",
     "scikit-learn",
+    "phate>=2.0.0",
 ]
+
+[tool.uv.sources]
+local-corex = { git = "https://github.com/TomKerbyLab/Local_CorEx.git", branch = "main" }
