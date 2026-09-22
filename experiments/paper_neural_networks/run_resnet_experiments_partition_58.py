@@ -62,7 +62,7 @@ def load_or_save_features(from_scratch, resnet18, val_loader, num_clusters, devi
 
 
 def main():
-    base_dir = '/yunity/tkerby2/Local_CorEx/Local_CorEx_Experiments/Figures'
+    base_dir = '/yunity/tkerby2/Local_CorEx/Local_CorEx_Experiments/Figures/ResNet/cluster_58'
     partition=58
     num_clusters=100
     corex_factors = 20

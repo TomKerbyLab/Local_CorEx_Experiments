@@ -6,12 +6,7 @@ import numpy as np
 from datasets import load_dataset
 from torch.utils.data import Dataset, DataLoader
 import random
-from deepdream import (
-    DeepDreamer, 
-    TargetSpec, 
-    dream_images_and_plot
-)
-
+from deepdream import TargetSpec, dream_images_and_plot
 from tqdm.auto import tqdm
 
 def seed_worker(worker_id):
