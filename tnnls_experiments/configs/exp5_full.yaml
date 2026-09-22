@@ -1,0 +1,8 @@
+# Experiment 5 full configuration (defaults = spec: 100 clusters, top-3
+# factors, q=0.8, 5 random controls; offline HF since dataset is cached)
+n_clusters: 100
+n_factors: 10
+n_retained: 3
+primary_q: 0.80
+n_random_controls: 5
+n_check: 256

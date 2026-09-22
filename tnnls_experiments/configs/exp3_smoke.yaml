@@ -1,0 +1,7 @@
+grid: smoke
+n_factors: 3
+bio_dim_hidden: 2
+bio_n_repeat: 1
+bio_max_iter: 200
+support_fraction: 0.80
+n_workers: 0

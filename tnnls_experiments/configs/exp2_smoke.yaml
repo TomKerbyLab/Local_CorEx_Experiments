@@ -1,0 +1,16 @@
+grid: smoke
+n_factors: 4
+phate_dim: 10
+k_clusters: 2
+n_random_partitions: 2
+kmeans_n_init: 10
+n_bins: 10
+routing_in_corex: true
+native_gaussian_bio: false
+support_fraction: 0.80
+n_workers: 0
+run_diagnostics: false
+capability_diagnostic: false
+bio_max_iter: 100
+bio_dim_hidden: 4
+bio_n_repeat: 1

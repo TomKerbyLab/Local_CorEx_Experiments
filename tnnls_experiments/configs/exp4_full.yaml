@@ -1,0 +1,15 @@
+# Experiment 4 full configuration (defaults = spec grid)
+# 5 model seeds x 20 clusters x 3 layers x 5 factors x 4 thresholds.
+# Run in three steps:
+#   1) python -m tnnls_experiments.exp4_mnist.train            (5 seeds, full 100 epochs)
+#   2) python -m tnnls_experiments.exp4_mnist.benchmark --config this.yaml
+#   3) python -m tnnls_experiments.exp4_mnist.summarize
+n_factors: 10
+n_retained: 5
+support_thresholds: [0.60, 0.70, 0.80, 0.90]
+n_random_controls: 20
+n_random_controls_hidden_only: 5
+input_conditions: [output_aware, hidden_only]
+model_seeds: [5100, 5101, 5102, 5103, 5104]
+layers: [1, 2, 3]
+n_clusters: 20

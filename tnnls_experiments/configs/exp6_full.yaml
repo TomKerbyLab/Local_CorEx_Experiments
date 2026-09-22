@@ -1,0 +1,11 @@
+# Experiment 6 full configuration: 10 paired seeds 6100-6109,
+# full training (100 epochs max, patience 10).
+n_factors: 10
+n_retained_supports: 5
+n_retained_functional: 3
+support_thresholds: [0.60, 0.70, 0.80, 0.90]
+functional_q: 0.80
+n_random_functional: 5
+n_clusters: 20
+layers: [1, 2, 3]
+max_epochs: 100

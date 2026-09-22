@@ -1,0 +1,1 @@
+"""Experiment 5: ResNet-18 ImageNet validation."""

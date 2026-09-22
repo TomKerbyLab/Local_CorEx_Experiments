@@ -1,0 +1,10 @@
+# Experiment 1 full core grid (see agent_instructions/01_gaussian_partition_recovery.md)
+grid: core
+n_factors: 5          # M = 5 CorEx factors in the core grid
+phate_dim: 10         # PHATE embedding dimension
+k_clusters: 2
+n_random_partitions: 10
+kmeans_n_init: 50
+support_fraction: 0.80
+include_pca: true
+n_workers: 32         # parallel dataset replicates (each ~1 core)

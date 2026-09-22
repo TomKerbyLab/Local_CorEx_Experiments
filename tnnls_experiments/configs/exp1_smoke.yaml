@@ -1,0 +1,10 @@
+# Experiment 1 smoke-test configuration: smallest end-to-end validation.
+grid: smoke
+n_factors: 5
+phate_dim: 10
+k_clusters: 2
+n_random_partitions: 3
+kmeans_n_init: 10
+support_fraction: 0.80
+include_pca: true
+n_workers: 0

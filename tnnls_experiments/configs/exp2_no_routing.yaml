@@ -1,0 +1,10 @@
+# Secondary condition: routing variables excluded from CorEx fitting.
+# Apply to either core grid.
+grid: discrete_core
+n_factors: 4
+routing_in_corex: false
+n_bins: 10
+n_random_partitions: 10
+kmeans_n_init: 50
+support_fraction: 0.80
+n_workers: 24
