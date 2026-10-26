@@ -61,6 +61,29 @@ class ResultStore:
         tmp.unlink(missing_ok=True)
         return path
 
+    def write_multiple(
+        self, condition: dict, kinds_rows: dict[str, list[dict]]
+    ) -> list[Path]:
+        """Write several shards of one condition as a unit (e.g. runs+matches).
+
+        A crash between two single-kind writes used to wedge the condition:
+        the runs shard existed, so the next rerun raised FileExistsError on
+        every attempt. A condition is only complete when *every* kind exists
+        (is_done semantics), so a partial shard set is stale, not completed,
+        and is safely replaced here. Callers must still check is_done()
+        first; a fully-present shard set raises FileExistsError rather than
+        being overwritten.
+        """
+        paths = {kind: self.shard_path(condition, kind) for kind in kinds_rows}
+        if all(p.exists() for p in paths.values()):
+            raise FileExistsError(
+                "completed condition (all shards present): "
+                + ", ".join(sorted(p.name for p in paths.values()))
+            )
+        for path in paths.values():
+            path.unlink(missing_ok=True)
+        return [self.write(condition, kind, rows) for kind, rows in kinds_rows.items()]
+
     def read_all(self, kind: str) -> pd.DataFrame:
         """Concatenate all shards of one kind (summarizer entry point)."""
         frames = []

@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from tnnls_experiments.common import corex, information, metrics
-from tnnls_experiments.exp2_nonlinear import data
+from tnnls_experiments.exp2_nonlinear import data, runner
 
 
 def test_variable_single_group_membership_per_region():
@@ -155,6 +155,64 @@ def test_routing_mean_distance():
     for alpha in (0.0, 0.5, 1.0):
         nu0, nu1 = data.routing_means(alpha)
         assert np.linalg.norm(nu1 - nu0) == pytest.approx(4 * alpha)
+
+
+def test_cluster_selection_uses_raw_labels():
+    # Regression (raw-vs-aligned): when the estimated k-means labels are
+    # swapped relative to the true regions, the cluster selected for a region
+    # must be the raw cluster that *overlaps* the region, so that slicing raw
+    # labels selects the region's own observations.
+    labels = np.array([1, 1, 1, 1, 0, 0, 0, 0])   # swapped: raw 1 = region 0
+    region = np.array([0, 0, 0, 0, 1, 1, 1, 1])
+    sel_by_region = runner._select_clusters_by_region(labels, region, k=2)
+    assert sel_by_region == {0: 1, 1: 0}
+    for c in (0, 1):
+        sel = sel_by_region[c]
+        assert (region[labels == sel] == c).all()
+    # collapsed partition: both regions select the same raw cluster
+    collapsed = np.zeros(8, dtype=int)
+    sel_by_region = runner._select_clusters_by_region(collapsed, region, k=2)
+    assert sel_by_region[0] == sel_by_region[1]
+    # regression (regions_served): when BOTH regions select one cluster, the
+    # single cell serving them must record regions {0, 1}, not just the loop
+    # variable of the first region (a {c for c2 ...} comprehension yields
+    # only c, silently dropping region 1's matches)
+    assert runner.served_regions({0: 1, 1: 1}, 1) == {0, 1}
+    assert runner.served_regions({0: 1, 1: 0}, 1) == {0}
+    assert runner.served_regions({0: 1, 1: 0}, 0) == {1}
+    assert runner.served_regions({0: None, 1: None}, None) == {0, 1}
+
+
+def test_no_routing_scores_align_to_full_width():
+    # Regression (no_routing mismatch): association scores from a fit with
+    # routing columns dropped have fewer columns than the full-width truth
+    # masks; _score_fit must expand them back so matching works and FP
+    # indices stay in the original column space, with routing FPs reported
+    # as None.
+    p_total = 14 + 2 + 4
+    assoc = np.zeros((4, p_total - 2))
+    assoc[0, [0, 1, 2]] = 1.0      # region 0, group 1 = {1,2,3}
+    assoc[1, [3, 4, 5]] = 1.0      # region 0, group 2 = {4,5,6}
+    assoc[2, [6, 7, 8]] = 1.0      # region 0, group 3 = {7,8,9,10}
+    assoc[3, [16 - 2, 17 - 2]] = 5.0  # nuisance columns (strong leakage)
+    fit = corex.CorexFitRecord(
+        estimator="bio", n_factors_requested=4, n_factors_valid=4,
+        tcs=np.ones(4), mis=assoc, converged=True, runtime_s=0.0,
+        seed=1, n_samples=100, n_visible=p_total - 2)
+    ds = data.generate_discrete_dataset(50, 0.5, 0.05, 4, seed=9)
+    rows = runner._score_fit(
+        {"root_seed": 9}, "phate", 0, 0, "bio", "no_routing", fit,
+        ds["true_groups"], ds["routing_idx"], ds["nuisance_idx"],
+        p_total, 0.80, dropped=np.asarray(ds["routing_idx"]))
+    assert len(rows) == 4
+    matched_groups = {r["true_group"] for r in rows}
+    assert matched_groups == {1, 2, 3, 4}
+    for row in rows:
+        assert row["routing_fp"] is None
+        assert row["routing_fp_support"] is None
+    leakage_rows = [r for r in rows if r["learned_factor"] == 3]
+    assert leakage_rows and leakage_rows[0]["nuisance_fp"] > 0.0
+    assert leakage_rows[0]["true_group"] in (1, 2, 3, 4)
 
 
 def test_structure_diagnostics_parity():

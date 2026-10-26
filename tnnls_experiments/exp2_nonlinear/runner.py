@@ -200,31 +200,28 @@ def run_replicate(cond: dict, cfg: dict, store: ResultStore) -> dict:
     # CorEx input variants:
     #   primary: all variables incl. routing (discrete: raw bits; continuous:
     #            standardized then binned)
-    #   no_routing: routing columns dropped from CorEx fitting
-    corex_input = "with_routing" if cfg["routing_in_corex"] else "no_routing"
-    est_variants = []
+    #   no_routing: routing columns dropped from CorEx fitting at fit time
+    #               and re-inserted as zeros before scoring
     # estimator variants: bio (primary), linear (baseline); continuous also
     # has native gaussian bio variant if requested
     if generator == "parity":
-        X_all = ds["X"]  # signal+nuisance are 0/1; routing are continuous
-        # CorEx input requires nonnegative ints for discrete BioCorex: bin
-        # the two routing variables with the fixed equal-frequency rule.
-        X_routing = ds["X"][:, ds["routing_idx"]]
-        X_routing_b, _ = corex.discretize_equal_frequency(X_routing, cfg["n_bins"])
-        X_all = ds["X"].copy()
+        X_all = ds["X"].copy()  # signal+nuisance are 0/1; routing are continuous
+        # CorEx input must be nonnegative ints for discrete BioCorex: bin the
+        # two routing variables with the fixed equal-frequency rule.
+        X_routing_b, _ = corex.discretize_equal_frequency(
+            ds["X"][:, ds["routing_idx"]], cfg["n_bins"])
         X_all[:, ds["routing_idx"]] = X_routing_b
-        variants = [("bio", "with_routing"), ("linear", "with_routing")]
-        if not cfg["routing_in_corex"]:
-            variants = [("bio", "no_routing"), ("linear", "no_routing")]
+        input_suffix = "with_routing" if cfg["routing_in_corex"] else "no_routing"
+        variants = [("bio", input_suffix), ("linear", input_suffix)]
     else:
         X_cont = ds["X"]
         X_std, _, _ = corex.standardize_columns(X_cont)
         Xb, _ = corex.discretize_equal_frequency(X_std, cfg["n_bins"])
-        variants = [("bio", "binned_with_routing"), ("linear", "binned_with_routing")]
+        input_suffix = "with_routing" if cfg["routing_in_corex"] else "no_routing"
+        variants = [("bio", "binned_" + input_suffix),
+                    ("linear", "binned_" + input_suffix)]
         if cfg["native_gaussian_bio"]:
-            variants.append(("bio_gaussian", "gaussian_with_routing"))
-    if not cfg["routing_in_corex"] and generator != "parity":
-        variants = [(e, i.replace("with_routing", "no_routing")) for e, i in variants]
+            variants.append(("bio_gaussian", "gaussian_" + input_suffix))
 
     run_rows: list[dict] = []
     match_rows: list[dict] = []
@@ -272,10 +269,8 @@ def run_replicate(cond: dict, cfg: dict, store: ResultStore) -> dict:
             run_rows, match_rows, draw=draw,
         )
 
-    store.write(condition_keys(cond) | {"corex_input": "ALL", "estimator": "ALL"},
-                "runs", run_rows)
-    store.write(condition_keys(cond) | {"corex_input": "ALL", "estimator": "ALL"},
-                "matches", match_rows)
+    shard_keys = condition_keys(cond) | {"corex_input": "ALL", "estimator": "ALL"}
+    store.write_multiple(shard_keys, {"runs": run_rows, "matches": match_rows})
     return {"n_runs": len(run_rows), "n_matches": len(match_rows)}
 
 
@@ -297,20 +292,14 @@ def _fit_and_score_partitions(
         cell_specs = [("region0", np.flatnonzero(region == 0), {0}),
                       ("region1", np.flatnonzero(region == 1), {1})]
     else:
-        aligned, _ = metrics.align_partition(labels, region)
         pm = metrics.partition_metrics(region, labels)
-        # for k=2 the aligned labels map clusters to regions directly; for
-        # k!=2 select the cluster with largest overlap per region (no forced
+        # select the *raw* estimated cluster with the largest overlap with
+        # each true region (the aligned region id must never be used to index
+        # raw labels; they differ under a k-means label swap). No forced
         # one-to-one map; if the same cluster is selected for both regions,
         # both region scores use that cluster's factors, and the fact is
-        # recorded on the run row)
-        sel_by_region = {}
-        for c in (0, 1):
-            if k == 2:
-                sel_by_region[c] = c if (aligned == c).any() else None
-            else:
-                overlaps = [((labels == e) & (region == c)).sum() for e in range(k)]
-                sel_by_region[c] = int(np.argmax(overlaps)) if sum(overlaps) > 0 else None
+        # recorded on the run row.
+        sel_by_region = _select_clusters_by_region(labels, region, k)
         cell_specs = []
         seen = set()
         for c in (0, 1):
@@ -319,7 +308,7 @@ def _fit_and_score_partitions(
                 continue
             seen.add(sel)
             cell_specs.append((f"cluster{sel}", np.flatnonzero(labels == sel),
-                               {c for c2 in (0, 1) if sel_by_region[c2] == sel}))
+                               served_regions(sel_by_region, sel)))
         run_rows.append({
             **base_keys, "partition_method": method, "region": -1,
             "partition_draw": draw, "partition_ari": pm["ari"],
@@ -332,7 +321,7 @@ def _fit_and_score_partitions(
     for estimator, variant in variants:
         for cell_name, cell_idx, regions_served in cell_specs:
             s_fit = seeds.derive_seed(s_corex, estimator, method, cell_name)
-            fit, fit_row, fit_status = _fit_estimator(
+            fit, fit_row, fit_status, dropped = _fit_estimator(
                 cfg, ds, estimator, variant, cell_idx, M, s_fit,
                 routing_idx, generator, X_all, Xb, X_std)
             if cell_name == "global":
@@ -351,30 +340,65 @@ def _fit_and_score_partitions(
                     match_rows += _score_fit(
                         base_keys, method, c, draw, estimator, variant, fit,
                         ds["true_groups"], routing_idx, nuisance_idx,
-                        ds["X"].shape[1], frac)
+                        ds["X"].shape[1], frac, dropped=dropped)
     return
+
+
+def _select_clusters_by_region(labels, region, k):
+    """Raw estimated cluster with the largest overlap with each true region.
+
+    Returns {region_id: raw_cluster_id or None}. The aligned region id must
+    never be used to index raw labels (they differ whenever the k-means label
+    map is a swap). A collapsed partition yields the same cluster for both
+    regions; the caller records that fact on the run row.
+    """
+    labels = np.asarray(labels)
+    if len(np.unique(labels)) < 1:
+        return {c: None for c in (0, 1)}
+    out = {}
+    for c in (0, 1):
+        overlaps = [((labels == e) & (region == c)).sum() for e in range(k)]
+        out[c] = int(np.argmax(overlaps)) if sum(overlaps) > 0 else None
+    return out
+
+
+def served_regions(sel_by_region, sel):
+    """True regions served by one selected raw cluster (its regions_served).
+
+    A cluster selected by BOTH regions serves both: one fit, scored against
+    each region's ground truth. Returns a frozenset so it can never carry
+    duplicate or stale loop variables.
+    """
+    return frozenset(
+        c2 for c2 in (0, 1) if sel_by_region.get(c2) == sel
+    )
 
 
 def _fit_estimator(cfg, ds, estimator, variant, cell_idx, M, s_fit,
                    routing_idx, generator, X_all, Xb, X_std):
-    """Fit one estimator on one partition cell. Returns (fit, row, status)."""
+    """Fit one estimator on one partition cell.
+
+    Returns (fit, row, status, dropped) where `dropped` is the array of
+    original column indices removed from the CorEx input (None when the full
+    width is kept). Callers re-insert zeros at the dropped positions before
+    scoring so association columns stay aligned with the full-width
+    ground-truth masks.
+    """
     import time as _time
 
     if generator == "parity":
         X = X_all
-        if variant == "no_routing":
-            keep = np.ones(X.shape[1], bool)
-            keep[routing_idx] = False
-            X = X[:, keep]
     else:
         if variant.startswith("gaussian"):
             X = X_std
         else:
             X = Xb
-        if variant.endswith("no_routing"):
-            keep = np.ones(X.shape[1], bool)
-            keep[routing_idx] = False
-            X = X[:, keep]
+    dropped = None
+    if variant.endswith("no_routing"):
+        keep = np.ones(X.shape[1], bool)
+        keep[routing_idx] = False
+        dropped = np.asarray(routing_idx)
+        X = X[:, keep]
     X_cell = X[cell_idx]
 
     t0 = _time.time()
@@ -397,18 +421,33 @@ def _fit_estimator(cfg, ds, estimator, variant, cell_idx, M, s_fit,
             "runtime_s": _time.time() - t0, "corex_converged": False,
             "n_factors_valid": 0, "total_tc": None,
             "failure_stage": "corex_fit", "exception": str(e),
-        }, "failed"
+        }, "failed", dropped
     return fit, {
         "runtime_s": fit.runtime_s, "corex_converged": fit.converged,
         "n_factors_valid": fit.n_factors_valid, "total_tc": fit.total_tc(),
         "failure_stage": None, "exception": None,
-    }, "ok"
+    }, "ok", dropped
 
 
 def _score_fit(base_keys, method, region, draw, estimator, variant, fit,
-               true_groups, routing_idx, nuisance_idx, p_total, frac):
-    """Match factors to the 4 true groups of `region`; routing + nuisance FP."""
+               true_groups, routing_idx, nuisance_idx, p_total, frac,
+               dropped=None):
+    """Match factors to the 4 true groups of `region`; routing + nuisance FP.
+
+    If routing columns were dropped from the CorEx input (`dropped` is not
+    None), the association matrix is expanded back to full width with zeros
+    at the dropped positions first: truth vectors are zero there, so cosine
+    matching is unchanged, while all FP/support indices remain in the
+    original column space. Routing false positives are reported as None for
+    these variants because routing is excluded from the input by
+    construction.
+    """
     assoc = fit.association_scores()
+    if dropped is not None:
+        keep = np.setdiff1d(np.arange(p_total), np.asarray(dropped))
+        expanded = np.zeros((assoc.shape[0], p_total), dtype=float)
+        expanded[:, keep] = assoc
+        assoc = expanded
     group_keys = [(region, g) for g in range(1, 5)]
     truth = np.vstack([true_groups[gk] for gk in group_keys])
     # routing columns are zero in all truth vectors and must not be scored
@@ -447,12 +486,12 @@ def _score_fit(base_keys, method, region, draw, estimator, variant, fit,
             "topd_recall": topk["recall"],
             "topd_f1": topk["f1"],
             "topd_jaccard": topk["jaccard"],
-            "routing_fp": rfp,
+            "routing_fp": None if dropped is not None else rfp,
             "nuisance_fp": nfp,
             "support_size": sup.size,
             "support_density": sup.density,
             "support_f1": sup_m["f1"],
-            "routing_fp_support": rfp_sup,
+            "routing_fp_support": None if dropped is not None else rfp_sup,
             "nuisance_fp_support": nfp_sup,
             "support_degenerate": sup.degenerate,
         })
@@ -504,7 +543,9 @@ def run_capability_diagnostic(cfg: dict) -> None:
                 "group_size": d,
                 "eta": eta,
                 "n": n,
-                "true_tc_bits": float(d - 1) if eta == 0 else None,
+                # parity TC is exactly 1 bit for every d >= 2: the parity
+                # constraint leaves 2^(d-1) equiprobable atoms
+                "true_tc_bits": 1.0 if eta == 0 else None,
                 "std_init_tc": float(fit_std.tcs[0]),
                 "seeded_init_tc": float(fit_atom.tcs[0]),
                 "seeded_init_uses_ground_truth": True,
@@ -572,6 +613,11 @@ def main(cfg: dict) -> dict:
     logger.info("Grid %s: %d conditions (%d already done)", grid_name, len(pending),
                 len(grid) - len(pending))
 
+    # FailureLog only appends, so count this run's failures as the rows added
+    # during the run; rows from earlier runs must not inflate this record.
+    pre_failures = failure_log.read()
+    n_failures_before = 0 if pre_failures.empty else len(pre_failures)
+
     t0 = time.time()
     run_parallel(
         functools.partial(run_replicate, cfg=defaults, store=store),
@@ -583,11 +629,18 @@ def main(cfg: dict) -> dict:
     )
     elapsed = time.time() - t0
     failures = failure_log.read()
-    n_fail = 0 if failures.empty else len(failures)
+    n_fail = 0 if failures.empty else max(0, len(failures) - n_failures_before)
     record = {"grid": grid_name, "n_conditions": len(grid),
               "completed_shards": store.count("runs"),
               "failures": n_fail, "elapsed_s": elapsed}
-    config.mark_complete(run_id, record)
+    if n_fail:
+        # a run with failed conditions may not be marked complete: the failed
+        # conditions stay pending and are retried on the next invocation
+        logger.warning(
+            "Run %s finished with %d failed conditions; not marking complete",
+            run_id, n_fail)
+    else:
+        config.mark_complete(run_id, record)
     from ..common.io import write_run_report
     write_run_report(EXPERIMENT, run_id, len(grid) - n_fail, n_fail,
                      {"grid": grid_name, "elapsed_s": f"{elapsed:.0f}"})

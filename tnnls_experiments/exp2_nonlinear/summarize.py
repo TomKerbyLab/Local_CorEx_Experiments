@@ -17,16 +17,23 @@ METHOD_ORDER = ["global", "oracle", "phate", "raw_kmeans", "random"]
 
 
 def aggregate(matches: pd.DataFrame) -> pd.DataFrame:
+    """Aggregate factor-level matches to replicate level, preserving rows.
+
+    Region values are averaged within a replicate; random-partition draws are
+    kept as separate rows: each draw is a control replicate of the partition
+    method (spec 02 §methods), and averaging them first would understate
+    draw-to-draw variance.
+    """
     keys = ["generator", "root_seed", "n_per_region", "alpha", "noise",
             "n_nuisance", "partition_method", "partition_draw", "region",
             "estimator", "corex_input"]
     metric_cols = ["cosine", "auprc", "topd_f1", "topd_precision",
-                   "topd_recall", "factor_tc", "routing_fp", "nuisance_fp",
+                   "topd_recall", "routing_fp", "nuisance_fp",
                    "support_f1", "support_size", "support_density"]
-    # within (replicate, method, cell): mean over the 4 matched factors
+    # within (replicate, method, draw, cell): mean over the 4 matched factors
     agg = matches.groupby(keys, dropna=False)[metric_cols].mean().reset_index()
-    # within replicate: mean over regions and random draws
-    keys2 = [k for k in keys if k not in ("partition_draw", "region")]
+    # within replicate (incl. draw): mean over regions
+    keys2 = [k for k in keys if k != "region"]
     return agg.groupby(keys2, dropna=False)[metric_cols].mean().reset_index()
 
 

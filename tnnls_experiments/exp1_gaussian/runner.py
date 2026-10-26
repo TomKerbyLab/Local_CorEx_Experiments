@@ -227,7 +227,7 @@ def run_replicate(cond: dict, cfg: dict, store: ResultStore) -> dict:
             sel_by_region[c] = sel
             if sel is None:
                 continue
-            if k == 2 and sel_by_region.get(1 - c) == sel:
+            if sel_by_region.get(1 - c) == sel:
                 same_cluster_selected = True
             Xc = X_std[labels == sel]
             s_fit = seeds.derive_seed(root, "corex", method, c)
@@ -271,8 +271,9 @@ def run_replicate(cond: dict, cfg: dict, store: ResultStore) -> dict:
                 nuisance_mask, p_total, frac,
             )
 
-    store.write(condition_keys(cond), "runs", run_rows)
-    store.write(condition_keys(cond), "matches", match_rows)
+    store.write_multiple(
+        condition_keys(cond), {"runs": run_rows, "matches": match_rows}
+    )
     return {"n_runs": len(run_rows), "n_matches": len(match_rows)}
 
 
@@ -310,15 +311,15 @@ def _run_row(base_keys, method, region, draw, fit, *, ari, purity,
 
 
 def _select_cluster_for_region(labels, region, c, k):
-    """Estimated cluster with the largest number of observations from true
-    region c. For k=2 returns the aligned cluster id (0/1); records when the
-    same cluster is selected for both regions via the caller."""
+    """Raw estimated cluster with the largest number of observations from true
+    region c. Returns the *raw* cluster id so callers can slice ``labels``
+    directly; the aligned-region id must never be used to index raw labels
+    (they differ whenever the k-means label map is a swap). A collapsed
+    partition yields the same cluster for both regions, which the caller
+    records via ``same_cluster_selected``."""
     labels = np.asarray(labels)
-    if k == 2:
-        if len(np.unique(labels)) != 2:
-            return None
-        aligned, _ = metrics.align_partition(labels, region)
-        return c if (aligned == c).any() else None
+    if len(np.unique(labels)) < 1:
+        return None
     overlap = np.array([((labels == e) & (region == c)).sum() for e in range(k)])
     return int(np.argmax(overlap)) if overlap.sum() > 0 else None
 
@@ -404,8 +405,10 @@ def main(cfg: dict) -> dict:
     logger.info("Grid %s: %d conditions (%d already done)", grid_name, len(pending),
                 len(grid) - len(pending))
 
-    def work(cond, cfg=defaults, store=store):
-        return run_replicate(cond, cfg, store)
+    # FailureLog only appends, so count this run's failures as the rows added
+    # during the run; rows from earlier runs must not inflate this record.
+    pre_failures = failure_log.read()
+    n_failures_before = 0 if pre_failures.empty else len(pre_failures)
 
     t0 = time.time()
     run_parallel(
@@ -419,7 +422,7 @@ def main(cfg: dict) -> dict:
     elapsed = time.time() - t0
     n_ok = store.count("runs")
     failures = failure_log.read()
-    n_fail = 0 if failures.empty else len(failures)
+    n_fail = 0 if failures.empty else max(0, len(failures) - n_failures_before)
     record = {
         "grid": grid_name,
         "n_conditions": len(grid),
@@ -427,7 +430,14 @@ def main(cfg: dict) -> dict:
         "failures": n_fail,
         "elapsed_s": elapsed,
     }
-    config.mark_complete(run_id, record)
+    if n_fail:
+        # a run with failed conditions may not be marked complete: the failed
+        # conditions stay pending and are retried on the next invocation
+        logger.warning(
+            "Run %s finished with %d failed conditions; not marking complete",
+            run_id, n_fail)
+    else:
+        config.mark_complete(run_id, record)
     from ..common.io import write_run_report
     write_run_report(EXPERIMENT, run_id, len(grid) - n_fail, n_fail,
                      {"grid": grid_name, "elapsed_s": f"{elapsed:.0f}"})

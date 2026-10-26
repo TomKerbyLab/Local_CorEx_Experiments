@@ -18,3 +18,13 @@ dependencies = [
 
 [tool.uv.sources]
 local-corex = { git = "https://github.com/TomKerbyLab/Local_CorEx.git", branch = "main" }
+
+[tool.pytest.ini_options]
+# The experiment packages name their validation modules tests.py (not the
+# pytest default test_*.py), so pytest never collected them without this.
+python_files = ["test_*.py", "tests.py"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+]

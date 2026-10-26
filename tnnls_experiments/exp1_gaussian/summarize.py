@@ -17,24 +17,37 @@ EXPERIMENT = "gaussian"
 
 
 def replicate_aggregate(matches: pd.DataFrame) -> pd.DataFrame:
-    """Aggregate factor-level matches within region, then within replicate."""
+    """Aggregate factor-level matches within region, then within replicate.
+
+    Random-partition draws are kept as separate rows: each draw is a control
+    replicate of the partition method, and averaging draws first would
+    understate draw-to-draw variance in the SE/CI and contrasts.
+    """
     # within (replicate, method, draw, region): mean over the 5 matched factors
     keys = ["root_seed", "regime", "n_per_region", "alpha", "n_nuisance",
             "partition_method", "partition_draw", "region"]
     metric_cols = [c for c in matches.columns
                    if c.startswith(("cosine", "auprc", "top4", "nfp",
-                                    "support_", "nfp_support"))]
+                                    "support_", "nfp_support"))
+                   and c != "support_degenerate"]
     agg = matches.groupby(keys, dropna=False)[metric_cols].mean().reset_index()
-    # within replicate: mean over regions and draws (random partitions only:
-    # each draw is a control replicate, so keep draws separate for random)
+    # within replicate: mean over regions, keeping draws separate
     keys2 = ["root_seed", "regime", "n_per_region", "alpha", "n_nuisance",
-             "partition_method", "region"]
+             "partition_method", "partition_draw"]
     return agg.groupby(keys2, dropna=False)[metric_cols].mean().reset_index()
 
 
 def paired_contrasts(agg: pd.DataFrame) -> pd.DataFrame:
     """Paired differences of each method vs global and vs oracle, within
-    condition (regime, n, alpha, p_n, region). Replicates are root seeds."""
+    condition (regime, n, alpha, p_n, region).
+
+    For single-fit methods the replicate is the root seed. For random
+    partitions each draw of a generated dataset is paired with that
+    dataset's global/oracle fit (a merge, not an index lookup), so the
+    contrasts reflect draw-to-draw variability.
+    """
+    merge_keys = ["regime", "n_per_region", "alpha", "n_nuisance", "region",
+                  "root_seed"]
     rows = []
     for (regime, n, alpha, p_n, region), grp in agg.groupby(
         ["regime", "n_per_region", "alpha", "n_nuisance", "region"]
@@ -42,28 +55,26 @@ def paired_contrasts(agg: pd.DataFrame) -> pd.DataFrame:
         for method in grp["partition_method"].unique():
             if method in ("global", "oracle"):
                 continue
-            sub = grp[grp["partition_method"] == method].set_index("root_seed")
-            glb = grp[grp["partition_method"] == "global"].set_index("root_seed")
-            orc = grp[grp["partition_method"] == "oracle"].set_index("root_seed")
-            common_g = sub.index.intersection(glb.index)
-            common_o = sub.index.intersection(orc.index)
-            for metric in ("auprc", "top4_f1", "cosine"):
-                if metric not in sub.columns:
+            sub = grp[grp["partition_method"] == method]
+            for vs in ("global", "oracle"):
+                base = grp[grp["partition_method"] == vs]
+                if base.empty:
                     continue
-                x = sub.loc[common_g, metric].to_numpy(float)
-                y = glb.loc[common_g, metric].to_numpy(float)
-                s = paired_difference_summary(x, y)
-                rows.append({"regime": regime, "n_per_region": n, "alpha": alpha,
-                             "n_nuisance": p_n, "region": region,
-                             "method": method, "metric": metric,
-                             "vs": "global", **s})
-                x = sub.loc[common_o, metric].to_numpy(float)
-                y = orc.loc[common_o, metric].to_numpy(float)
-                s = paired_difference_summary(x, y)
-                rows.append({"regime": regime, "n_per_region": n, "alpha": alpha,
-                             "n_nuisance": p_n, "region": region,
-                             "method": method, "metric": metric,
-                             "vs": "oracle", **s})
+                for metric in ("auprc", "top4_f1", "cosine"):
+                    if metric not in sub.columns:
+                        continue
+                    merged = sub[merge_keys + [metric]].merge(
+                        base[merge_keys + [metric]].rename(
+                            columns={metric: metric + "_base"}),
+                        on=merge_keys)
+                    s = paired_difference_summary(
+                        merged[metric].to_numpy(float),
+                        merged[metric + "_base"].to_numpy(float))
+                    rows.append({"regime": regime, "n_per_region": n,
+                                 "alpha": alpha, "n_nuisance": p_n,
+                                 "region": region,
+                                 "method": method, "metric": metric,
+                                 "vs": vs, **s})
     return pd.DataFrame(rows)
 
 
