@@ -1,0 +1,10 @@
+7e6391a0f83cd3d30411193ed4e2b1c06b8fb3d8145dc489e27f2e4502d56466  ./figures/nonlinear_main_figure.png
+ba51405c1af4a65f9a119e0d7e184081a9d1e12a122c6db6bf351243b0b20955  ./nonlinear_summary.csv
+63c433a9d7851ee8d8500468b3c566c724472c0d6325abfc8dd0e39a609404fd  ./smoke/parity/n_300/alpha_0.5/eta_0.05/nuisance_14/root_02000_matches.csv
+b49c7dbf5dfb3bfeaf0835ddd695a5e00bd93c9744214d7b77ec544b9b8f7b71  ./smoke/parity/n_300/alpha_0.5/eta_0.05/nuisance_14/root_02000_runs.csv
+d602aba09585036b4f9bb6d690420ceada1179fef6e349a9786a684ab48af5bb  ./smoke/parity/n_300/alpha_0.5/eta_0.05/nuisance_14/root_02000_runs.meta.json
+f380a30109864f24400c7526c03cf5577a8a8eef0a0ce54d32f54528528ac5d3  ./smoke/sine_sum/n_300/alpha_0.5/sigma_0.2/nuisance_14/root_03000_matches.csv
+9af5da64cd7b1799958dd985b6f1d0e264bfa8da956ad6c3432bec2b79dadfb5  ./smoke/sine_sum/n_300/alpha_0.5/sigma_0.2/nuisance_14/root_03000_runs.csv
+df48a9993343241e0a5a21e9bdd6317d10782e2df8fd2071f0ad97de521e88f0  ./smoke/sine_sum/n_300/alpha_0.5/sigma_0.2/nuisance_14/root_03000_runs.meta.json
+a99e3782150620f0bbe923083b2c23c3392c4d986d6526dd87733c91f5ae99fb  ./smoke/smoke_matches_combined.csv
+777cf3738647d96a0d75c3b519ac5b2d70dfc650ef153fb26b842d2c8475a59a  ./smoke/smoke_runs_combined.csv
