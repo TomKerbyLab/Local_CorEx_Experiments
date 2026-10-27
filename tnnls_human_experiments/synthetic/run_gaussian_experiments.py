@@ -7,8 +7,9 @@ without repeating finished work. A combined CSV is rebuilt after the run.
 
 import argparse
 from pathlib import Path
+from time import time
 
-from result_io import combine_csv_files, write_csv_atomically
+from result_io import append_run_log, combine_csv_files, write_csv_atomically
 import simulation as lc_simulation
 
 
@@ -117,44 +118,69 @@ def run_experiment(experiment, output_dir, repetitions=None,
     if dry_run:
         return None
 
-    for setup in config['setups']:
-        setup_flags = SETUP_FLAGS[setup]
-        for sample_size in config['sample_sizes']:
-            for nuisance_dimensions in config['nuisance_dimensions']:
-                for rep in range(num_repetitions):
-                    output_path = condition_output_path(
-                        output_dir,
-                        experiment,
-                        setup,
-                        sample_size,
-                        nuisance_dimensions,
-                        rep,
-                    )
-                    if output_path.exists() and not overwrite:
-                        print(f"Skipping completed condition: {output_path}")
-                        continue
+    start_time = time()
+    append_run_log(output_dir, {
+        'event': 'run_start',
+        'experiment': experiment,
+        'repetitions': num_repetitions,
+    })
+    conditions_written = 0
+    conditions_skipped = 0
+    status = 'completed'
+    try:
+        for setup in config['setups']:
+            setup_flags = SETUP_FLAGS[setup]
+            for sample_size in config['sample_sizes']:
+                for nuisance_dimensions in config['nuisance_dimensions']:
+                    for rep in range(num_repetitions):
+                        output_path = condition_output_path(
+                            output_dir,
+                            experiment,
+                            setup,
+                            sample_size,
+                            nuisance_dimensions,
+                            rep,
+                        )
+                        if output_path.exists() and not overwrite:
+                            conditions_skipped += 1
+                            print(f"Skipping completed condition: {output_path}")
+                            continue
 
-                    print(
-                        f"Running {experiment}: setup={setup}, "
-                        f"n={sample_size}, nuisance={nuisance_dimensions}, "
-                        f"rep={rep}"
-                    )
-                    results = lc_simulation.run_simulation(
-                        rep=rep,
-                        cluster_size=sample_size,
-                        alphas=config['alphas'],
-                        num_factors=config['num_factors'],
-                        estimators=config['estimators'],
-                        partition_methods=config['partition_methods'],
-                        same_dist=setup_flags['same_dist'],
-                        disjoint=setup_flags['disjoint'],
-                        nuisance_dimensions=nuisance_dimensions,
-                        progress=True,
-                    )
-                    results.insert(0, 'experiment', experiment)
-                    write_csv_atomically(results, output_path)
+                        print(
+                            f"Running {experiment}: setup={setup}, "
+                            f"n={sample_size}, nuisance={nuisance_dimensions}, "
+                            f"rep={rep}"
+                        )
+                        results = lc_simulation.run_simulation(
+                            rep=rep,
+                            cluster_size=sample_size,
+                            alphas=config['alphas'],
+                            num_factors=config['num_factors'],
+                            estimators=config['estimators'],
+                            partition_methods=config['partition_methods'],
+                            same_dist=setup_flags['same_dist'],
+                            disjoint=setup_flags['disjoint'],
+                            nuisance_dimensions=nuisance_dimensions,
+                            progress=True,
+                        )
+                        results.insert(0, 'experiment', experiment)
+                        write_csv_atomically(results, output_path)
+                        conditions_written += 1
 
-    combined_path = combine_results(output_dir, experiment)
+        combined_path = combine_results(output_dir, experiment)
+    except BaseException:
+        status = 'failed'
+        raise
+    finally:
+        append_run_log(output_dir, {
+            'event': 'run_end',
+            'experiment': experiment,
+            'status': status,
+            'conditions_written': conditions_written,
+            'conditions_skipped': conditions_skipped,
+            'elapsed_s': round(time() - start_time, 3),
+        })
+
     if combined_path is not None:
         print(f"Combined results: {combined_path}")
     return combined_path

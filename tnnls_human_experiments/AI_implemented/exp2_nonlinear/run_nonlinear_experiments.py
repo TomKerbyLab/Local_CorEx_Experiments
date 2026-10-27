@@ -44,7 +44,11 @@ import pandas as pd
 # result_io lives in ../synthetic; APPEND (not insert) so the sibling
 # modules there can never shadow this directory's same-named modules
 sys.path.append(str(Path(__file__).resolve().parents[2] / 'synthetic'))
-from result_io import combine_csv_files, write_csv_atomically  # noqa: E402
+from result_io import (  # noqa: E402
+    append_run_log,
+    combine_csv_files,
+    write_csv_atomically,
+)
 
 import nonlinear_data  # noqa: E402
 import partitioning  # noqa: E402
@@ -744,34 +748,55 @@ def run_experiment(experiment_name, output_dir, repetitions=None,
     if dry_run:
         return None
 
-    completed = 0
+    append_run_log(output_dir, {
+        'event': 'run_start',
+        'experiment': experiment_name,
+        'repetitions': config.get('repetitions'),
+    })
+    conditions_written = 0
+    status = 'completed'
     started = time.time()
-    for index, condition in enumerate(conditions):
-        paths = condition_output_paths(output_dir, experiment_name, condition)
-        if (paths['runs'].exists() and paths['matches'].exists()
-                and not overwrite):
-            completed += 1
-            continue
-        noise_name = GENERATOR_NOISE_NAMES[condition['generator']]
-        print(
-            f"[{index + 1}/{len(conditions)}] "
-            f"{condition['generator']} n={condition['n_per_region']} "
-            f"alpha={condition['alpha']} {noise_name}={condition['noise']} "
-            f"nuisance={condition['n_nuisance']} "
-            f"root={condition['root_seed']}"
-        )
-        runs_rows, match_rows = run_condition(
-            condition, config, DEFAULTS)
-        write_csv_atomically(
-            pd.DataFrame(runs_rows, columns=RUN_COLUMNS), paths['runs'])
-        write_csv_atomically(
-            pd.DataFrame(match_rows, columns=MATCH_COLUMNS),
-            paths['matches'])
-        save_condition_metadata(condition, config, DEFAULTS, paths)
-    combined = combine_results(output_dir, experiment_name)
+    try:
+        for index, condition in enumerate(conditions):
+            paths = condition_output_paths(
+                output_dir, experiment_name, condition)
+            if (paths['runs'].exists() and paths['matches'].exists()
+                    and not overwrite):
+                continue
+            conditions_written += 1
+            noise_name = GENERATOR_NOISE_NAMES[condition['generator']]
+            print(
+                f"[{index + 1}/{len(conditions)}] "
+                f"{condition['generator']} n={condition['n_per_region']} "
+                f"alpha={condition['alpha']} {noise_name}={condition['noise']} "
+                f"nuisance={condition['n_nuisance']} "
+                f"root={condition['root_seed']}"
+            )
+            runs_rows, match_rows = run_condition(
+                condition, config, DEFAULTS)
+            write_csv_atomically(
+                pd.DataFrame(runs_rows, columns=RUN_COLUMNS), paths['runs'])
+            write_csv_atomically(
+                pd.DataFrame(match_rows, columns=MATCH_COLUMNS),
+                paths['matches'])
+            save_condition_metadata(condition, config, DEFAULTS, paths)
+        combined = combine_results(output_dir, experiment_name)
+    except BaseException:
+        status = 'failed'
+        raise
+    finally:
+        append_run_log(output_dir, {
+            'event': 'run_end',
+            'experiment': experiment_name,
+            'status': status,
+            'conditions_written': conditions_written,
+            'conditions_skipped': len(conditions) - conditions_written,
+            'elapsed_s': round(time.time() - started, 3),
+        })
     print(
-        f"Done: {completed}/{len(conditions)} conditions were already "
-        f"complete; combined: {combined} ({time.time() - started:.0f}s)"
+        f"Done: {len(conditions) - conditions_written}/{len(conditions)} "
+        f"conditions were already complete; combined: {combined} "
+        f"({time.time() - started:.0f}s)"
     )
     return combined
 

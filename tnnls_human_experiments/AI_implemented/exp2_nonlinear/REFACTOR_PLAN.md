@@ -23,7 +23,10 @@ knowledge outside the module docstrings. Functionality must not change:
    `sha256_manifest.txt` over everything except the manifest itself).
    Deterministic seeds mean a refactor that preserves behavior reproduces
    these files bit-for-bit: re-run smoke into a fresh output dir and
-   `diff -r` (or re-hash) against `golden_smoke/`.
+   `diff -r` (or re-hash) against `golden_smoke/`. The only expected extra
+   file in a fresh output dir is `run_log.jsonl` (run start/finish timing
+   metadata written by the runner); delete or ignore it when diffing or
+   re-hashing — it is not experimental output.
 2. After EVERY step below: `uv run pytest` (23 tests) and re-run smoke +
    `diff -r` against `golden_smoke/`. A diff is a refactoring bug, full stop.
    ONE known exception (found when comparing the first rerun): the
