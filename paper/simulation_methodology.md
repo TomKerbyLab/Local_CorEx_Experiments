@@ -4,7 +4,7 @@ This document describes the methodology of the two synthetic experiments in
 the human experiment pipeline (`tnnls_human_experiments/`):
 
 - **Experiment 1 — Gaussian grouped-covariance recovery**
-  (`synthetic/`, originally `exp1_gaussian/`), and
+  (`gaussian/`, renamed from `synthetic/`; originally `exp1_gaussian/`), and
 - **Experiment 2 — Nonlinear higher-order recovery**
   (`AI_implemented/exp2_nonlinear/`).
 
@@ -171,8 +171,7 @@ vectors. Scoring proceeds in three steps:
    assignment; the standardized **primary objective is max cosine
    similarity** — the same rule as Experiment 2 — while AUPRC is still
    computed and reported as the experiment-specific ranking metric.
-   *(Code pending: the Gaussian implementation currently maximizes AUPRC —
-   see Appendix E.)* This single assignment feeds every other metric.
+   This single assignment feeds every other metric.
 3. **Matched metrics.**
    - *matched AUPRC* and matched cosine similarity;
    - *top-k F1* at k = the true group size (support recovery: how much of
@@ -188,7 +187,7 @@ vectors. Scoring proceeds in three steps:
      versa) as **optimistic references** for matching performance — they
      relax the one-to-one constraint, so they upper-bound what the matched
      metrics can reach;
-   - *degenerate handling* (decided; code pending, Appendix E): factors
+   - *degenerate handling* (Appendix E): factors
      with effectively zero total score (≤ 10⁻¹² for the cumulative-support
      rule, and otherwise all-zero score columns) have, explicitly: an
      **empty predicted support**; support precision / recall / F1 /
@@ -200,11 +199,14 @@ vectors. Scoring proceeds in three steps:
      silently overridden. Degenerate factors **enter the primary
      support-recovery averages as zeros**; averages conditional on valid
      factors are reported separately, with the degenerate frequency.
-     Remaining score ties must not be resolved in favor of the
-     signal-column layout: the stable descending sort's lower-index
-     tie-break can otherwise award an all-zero factor a perfect top-d
-     result on the first true group (the group occupies the first column
-     block in both experiments).
+     Remaining score ties are **not** resolved in favor of the
+     signal-column layout: after the fix (Appendix E), rank-based
+     supports break ties with a reproducible, layout-free seeded
+     permutation of the tied columns (per-assignment and per-factor
+     sub-seeds) — the retired stable-sort lower-index tie-break would
+     otherwise have awarded an all-zero factor a perfect top-d result on
+     the first true group (the group occupies the first column block in
+     both experiments).
 
 ### 3.5 Experimental grids (16 paired replicates per condition)
 
@@ -295,8 +297,9 @@ raw estimated cluster containing most of its observations; aligned ids
 never index raw labels — a documented convention, since the label map can
 be a swap — and `same_cluster_selected` recording when both regions pick
 the same cluster) is retained only as a separately labeled diagnostic.
-*(Code pending: max-overlap is currently implemented as the primary rule —
-see Appendix E.)* A collapsed k-means output (a single estimated cluster)
+The one-to-one rule is now the implemented primary rule (Appendix E); the
+retired unconstrained per-region max-overlap rule survives in two
+diagnostic fields. A collapsed k-means output (a single estimated cluster)
 is recorded as `failed_partition` rather than silently dropped.
 
 ### 4.5 Fit variants
@@ -360,11 +363,11 @@ similarity**, then held fixed for all other metrics. Per matched pair:
   reported with size, density, and F1 against the true group, plus the role
   fractions *within* the support. Factors whose total MI ≤ 10⁻¹² are
   `support_degenerate`, flagged — and scored, not excluded: the decided
-  semantics (§3.4; code pending) give them an empty support with zeros
-  entering the primary support-recovery average. Under the current
-  implementation an all-zero factor inherits the first group's columns as
-  its top-d set via the stable sort's lower-index tie-break, which is
-  precisely the artifact this decision removes.
+  semantics (§3.4; implemented in both pipelines, Appendix E) give them an
+  empty support with zeros entering the primary support-recovery average.
+  Neutral tie breaking (§3.4) removes the retired stable-sort artifact in
+  which an all-zero factor inherited the first group's columns as its
+  top-d set via the lower-index tie-break.
 
 Aggregation is within each replicate fit (a random-partition draw is never
 averaged into another draw; collapsing over draws is left to downstream
@@ -391,9 +394,10 @@ Two diagnostics, run on **100,000 freshly generated observations** per cell
    **product** generator permuting a single member is *not* a valid null
    (dependence survives among the remaining members and the response), so
    the null there requires independently permuting **every** column.
-   *(Code pending: currently one member is permuted, correct as a null for
-   parity/sine; repeated-permutation distributions and the all-column
-   product null — see Appendix E.)*
+   Implemented as repeated-permutation distributions (50 repetitions;
+   mean, SD, and 95% quantile reported) with the all-column product null
+   (Appendix E), both against the plug-in bias of independent discretized
+   marginals at this sample size.
 2. **Capability diagnostic** — characterizes standard CorEx EM. Standard
    random-initialization Bio CorEx frequently attains near-zero explained
    TC on pure parity groups — with smoke-scale oracle fits still showing
@@ -405,7 +409,7 @@ Two diagnostics, run on **100,000 freshly generated observations** per cell
    The conclusion — standard CorEx EM's failure on pairwise-independent
    higher-order structure is an **optimization failure, not an
    expressiveness failure** — requires the two inits to be matched in
-   *capacity* as well as in family. The decided design (code pending):
+   *capacity* as well as in family. The implemented design (Appendix E):
    both inits use a **fixed cardinality of 2^d states** (8 for d = 3, 16
    for d = 4) — sufficient and conservative, though not minimal: with
    flip noise, the 2^(d−1)-state latent Z = (B₁, …, B_{d−1}) already
@@ -497,8 +501,8 @@ dropped positions.
 groups, held fixed for every other metric. The standardized **primary
 objective in both experiments is maximum cosine similarity**; AUPRC is
 additionally computed and reported as Experiment 1's ranking metric
-(§3.4; the Gaussian implementation's switch to cosine is pending code —
-Appendix E). Decided degenerate handling (code pending), explicit per
+(§3.4; implemented in both pipelines — Appendix E). Decided degenerate
+handling (implemented), explicit per
 quantity for an all-zero factor: predicted support **empty**; support
 precision / recall / F1 / Jaccard **0**; cosine similarity **0**; raw
 average precision **unchanged (= the group prevalence)**;
@@ -597,19 +601,20 @@ Bio vs Linear by noise under oracle fits; the structure-diagnostics panel).
 
 ## Appendix E. Follow-up items before final runs
 
-Decisions recorded in this revision whose code changes are still pending.
-The document states the *target* methodology above and flags each such
-passage "(code pending)"; this table is the closing backlog, ordered by
-the reviewer's recommendation that the metric fix, the diagnostic
-cardinality, and a favorable pilot precede any full nonlinear batch.
+The reviewer-ordered backlog from the previous revision. Items 1–6 are
+now **implemented** (commit references in the status column), and each
+"(code pending)" flag has been lifted from the body text; item 7 — the
+favorable pilot — is the remaining step before any full nonlinear batch,
+and item 8 was **not adopted** (the fixed init seed is retained by
+default, as documented in §3.3).
 
-| # | Item | Where the decision is recorded | Notes |
+| # | Item | Where the decision is recorded | Status |
 |---|---|---|---|
-| 1 | Degenerate / zero-score factor metrics (both pipelines) | §3.4, §4.7, Appendix B | Explicit per-quantity semantics: empty support; support P/R/F1/Jaccard = 0; cosine = 0; raw AUPRC unchanged (= prevalence); adjusted AUPRC = 0; zeros enter primary support-recovery averages, with conditional-on-valid averages and degenerate frequency reported alongside; neutral tie handling. Changes metric outputs → golden-smoke regeneration required |
-| 2 | Capability-diagnostic cardinality | §4.6, §4.8 | Fixed 2^d states (8 / 16) for **both** standard and seeded inits, recorded per row — sufficient and conservative, not minimal (2^(d−1) states suffice even with flip noise); higher cardinality only as sensitivity. Requires golden-smoke regeneration |
-| 3 | Structure-diagnostic null | §4.8 | Repeated-permutation distributions; all-column permutation null for the product generator; report the analytic parity reference 1 − h₂(η) |
-| 4 | Matching-objective harmonization | §3.4, §4.7, Appendix B | Gaussian Hungarian matching switches to cosine as primary; AUPRC remains computed/reported |
-| 5 | Cluster-selection rule | §4.4 | Hungarian one-to-one alignment becomes the primary fit-cell rule; max-overlap retained as a labeled diagnostic |
-| 6 | Global-capacity controls | §1 | Supplementary grids: Gaussian global M = 10 (vs 5 vs 2 × 5); nonlinear global M = 8 (vs 4 vs 2 × 4). Capacity comparison is apples-to-apples: **both** global budgets are scored against the same concatenated set of region-specific supports with the same matching rule, and the corresponding local aggregate (both regions' local fits pooled) is defined explicitly. The existing per-region recovery remains the primary workflow comparison |
-| 7 | Favorable pilot before full nonlinear grids | §1, §4.8 | Large n, low noise, oracle partition, no_routing, no nuisance; standard vs seeded init; support recovery and explained TC read together. Establishes where localization demonstrably helps vs. characterizes a limitation |
-| 8 | Optional: Gaussian fit seeds | §3.3 | Replace the fixed init seed 42 with derived per-fit seeds (changes results; the fixed seed is retained by default) |
+| 1 | Degenerate / zero-score factor metrics (both pipelines) | §3.4, §4.7, Appendix B | **Implemented** (nonlinear `c6d456a`, Gaussian `605c2ae`). Explicit per-quantity semantics: empty support; support P/R/F1/Jaccard = 0; cosine = 0; raw AUPRC unchanged (= prevalence); adjusted AUPRC = 0; zeros enter primary support-recovery averages, with conditional-on-valid averages and degenerate frequency reported alongside |
+| 2 | Capability-diagnostic cardinality | §4.6, §4.8 | **Implemented** (`c6d456a`): fixed 2^d states (8 / 16) for **both** standard and seeded inits, recorded per row — sufficient and conservative, not minimal; the golden smoke baseline was regenerated with the new metrics as part of that commit |
+| 3 | Structure-diagnostic null | §4.8 | **Implemented** (`c6d456a`): repeated-permutation distributions (50 repetitions; mean, SD, 95% quantile; both nulls); all-column permutation null for the product generator; analytic parity reference 1 − h₂(η) reported |
+| 4 | Matching-objective harmonization | §3.4, §4.7, Appendix B | **Implemented** (Gaussian `605c2ae`): Gaussian Hungarian matching maximizes cosine as primary; AUPRC remains computed/reported; harmonized degenerate semantics and neutral ties |
+| 5 | Cluster-selection rule | §4.4 | **Implemented** (`c6d456a`): Hungarian one-to-one alignment is the primary estimated-cluster rule; max-overlap retained as the labeled diagnostic fields `max_overlap_same_cluster` / `max_overlap_matches_hungarian` |
+| 6 | Global-capacity controls | §1 | **Implemented** (`5e653b0`): Gaussian global M = 10 vs 5 vs pooled oracle locals; nonlinear global M = 8 vs 4 vs 2 × 4. Capacity comparison is apples-to-apples: **both** global budgets are scored against the same concatenated set of region-specific supports with the same matching rule, and the corresponding local aggregate (both regions' local fits pooled) is defined explicitly. The existing per-region recovery remains the primary workflow comparison |
+| 7 | Favorable pilot before full nonlinear grids | §1, §4.8 | **Pending** — next step. Large n, low noise, oracle partition, no_routing, no nuisance; standard vs seeded init; support recovery and explained TC read together. Establishes where localization demonstrably helps vs. characterizes a limitation |
+| 8 | Optional: Gaussian fit seeds | §3.3 | **Not adopted** — the fixed init seed 42 is retained by default (the derived-seed option would change results) |
