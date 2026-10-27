@@ -348,6 +348,52 @@ def test_degenerate_factor_neutral_tie_handling():
     assert repeat['matched_top_d_f1'] == neutral['matched_top_d_f1']
 
 
+def test_capacity_condition_rows_and_seed_reuse():
+    # The capacity grid runs end to end at tiny scale, records every fit
+    # (kind/budget), and reuses the primary grid's global M=4 seed so the
+    # global fit matches the primary grid's exactly.
+    import capacity_experiment as capacity
+    condition = {
+        'generator': 'parity', 'n_per_region': 100, 'alpha': 0.5,
+        'noise': 0.05, 'n_nuisance': 0, 'root_seed': 2000,
+    }
+    tiny_defaults = {
+        **runner.DEFAULTS, 'bio_max_iter': 50, 'bio_n_repeat': 1,
+        'linear_max_iter': 500,
+    }
+    original_budgets = capacity.BUDGETS
+    capacity.BUDGETS = (2, 4)
+    try:
+        fit_rows, match_rows = capacity.run_capacity_condition(
+            condition, capacity.CAPACITY_CONFIG, tiny_defaults)
+    finally:
+        capacity.BUDGETS = original_budgets
+    kinds = {row['capacity_kind'] for row in fit_rows}
+    assert kinds == {'global', 'local_pooled'}
+    global_fits = [row for row in fit_rows if row['capacity_kind'] == 'global']
+    assert {row['budget'] for row in global_fits} == {2, 4}
+    pooled_fits = [
+        row for row in fit_rows
+        if row['capacity_kind'] == 'local_pooled'
+        and row['estimator'] == 'bio']
+    assert len(pooled_fits) == 2  # one per region
+    # matches cover both regions' groups under every candidate
+    match_kinds = {row['capacity_kind'] for row in match_rows}
+    assert match_kinds == {'global', 'local_pooled'}
+    for row in match_rows:
+        assert row['region'] in (0, 1)
+        assert 1 <= row['true_group'] <= runner.nonlinear_data.N_GROUPS
+    # the pooled local fits reuse the primary grid's oracle seeds
+    assert all(
+        row['fit_status'] == 'ok' for row in pooled_fits)
+    # seed identity: the M=4 global seed equals the primary grid's
+    bio_global_b4 = [
+        row for row in global_fits
+        if row['estimator'] == 'bio' and row['budget'] == 4]
+    assert bio_global_b4[0]['model_seed'] == runner.derived_seed(
+        2000, 'corex', 0, 'global', 'global', 'bio', 'with_routing')
+
+
 def test_condition_grids_match_spec():
     # Core grid sizes: discrete 2n x 3a x 3eta x 16 reps; continuous
     # 2n x 3a x 3sigma x 16 reps; smoke = 2 conditions.

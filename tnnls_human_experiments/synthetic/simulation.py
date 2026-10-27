@@ -31,6 +31,49 @@ def covariance_setup_name(same_dist, disjoint):
     return 'nondisjoint'
 
 
+def generate_gaussian_dataset(rep, cluster_size, alpha, disjoint=False,
+                              same_dist=False, nuisance_dimensions=0):
+    """One generated dataset with its ground truth (data separation helper).
+
+    The data seed excludes the nuisance count, so the signal data is PAIRED
+    across nuisance sweeps (nuisance is drawn from the continuing stream
+    after the signal draws). Returns (full_data, true_labels, true_groups,
+    data_seed, condition_values); condition_values feeds the partition
+    seeds, which the caller derives from PARTITION_SEED_CODES.
+    """
+    condition_values = (
+        int(rep),
+        int(cluster_size),
+        int(round(alpha * 1000)),
+        int(disjoint),
+        int(same_dist),
+    )
+    data_seed = deterministic_seed(*condition_values, 0)
+    cluster_1, cluster_2 = gen_clustered_sample(
+        same_dist=same_dist,
+        alpha=alpha,
+        cluster_size=cluster_size,
+        disjoint=disjoint,
+        nuisance_dimensions=nuisance_dimensions,
+        random_state=data_seed,
+    )
+    full_data = np.concatenate([cluster_1, cluster_2], axis=0)
+    true_labels = np.concatenate([
+        np.repeat('clust_1', cluster_size),
+        np.repeat('clust_2', cluster_size),
+    ])
+    true_groups = {
+        cluster: get_true_groups(
+            cluster,
+            disjoint=disjoint,
+            same_dist=same_dist,
+            nuisance_dimensions=nuisance_dimensions,
+        )
+        for cluster in ('clust_1', 'clust_2')
+    }
+    return full_data, true_labels, true_groups, data_seed, condition_values
+
+
 def run_simulation(rep,
                    cluster_size=100,
                    alphas=ALPHA_LIST,
@@ -67,29 +110,16 @@ def run_simulation(rep,
     rows = []
 
     for alpha in alphas:
-        condition_values = (
-            int(rep),
-            int(cluster_size),
-            int(round(alpha * 1000)),
-            int(disjoint),
-            int(same_dist),
-        )
-        data_seed = deterministic_seed(*condition_values, 0)
-
         generation_start = time()
-        cluster_1, cluster_2 = gen_clustered_sample(
-            same_dist=same_dist,
-            alpha=alpha,
+        (full_data, true_labels, true_groups, data_seed,
+         condition_values) = generate_gaussian_dataset(
+            rep=rep,
             cluster_size=cluster_size,
+            alpha=alpha,
             disjoint=disjoint,
+            same_dist=same_dist,
             nuisance_dimensions=nuisance_dimensions,
-            random_state=data_seed,
         )
-        full_data = np.concatenate([cluster_1, cluster_2], axis=0)
-        true_labels = np.concatenate([
-            np.repeat('clust_1', cluster_size),
-            np.repeat('clust_2', cluster_size),
-        ])
         generation_time = time() - generation_start
 
         partitions = {}
