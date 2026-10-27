@@ -32,8 +32,11 @@ The synthetic experiments support the paper's first claim:
 Experiment 1 establishes the claim with linear (covariance-structured)
 ground truth and clean analytic control. Experiment 2 establishes it under
 nonlinear, pairwise-independent dependence that is invisible to pairwise
-scans, and adds two diagnostics that characterize what CorEx can represent
-versus what generic EM optimization finds. In both experiments, the
+scans; within Experiment 2, the sine-sum generator is the *primary*
+demonstration that localization improves nonlinear recovery, while parity
+— the most demanding case — serves as a stress test characterizing the
+limits of generic CorEx EM. Two diagnostics characterize what CorEx can
+represent versus what generic EM optimization finds. In both experiments, the
 comparison set is: a **global** baseline (one fit on the pooled data) versus
 **localized** fits per estimated region, under an **oracle** partition
 (upper bound), a **data-driven** partition (realistic), and **random**
@@ -45,11 +48,14 @@ partitions (negative control).
    every method evaluated on that condition — global and localized fits,
    every partition method, every estimator, and every input variant see the
    same data. Method differences are therefore read like-for-like.
-2. **Derived seeds (spec 00 rule).** No global RNG state is used.
+2. **Derived seeds (spec 00 rule).** No global RNG state is relied on.
    Seed = `hash(root_seed, purpose, condition identifiers)`
    (sha256 of the serialized parts), giving independent, reproducible seeds
-   for data generation, partitioning, and each individual model fit. Rerunning
-   a condition reproduces the data bit-for-bit.
+   for data generation, partitioning, and model fits. Rerunning
+   a condition reproduces the data bit-for-bit. Derived seeds are the
+   *default* for every purpose; the one documented exception is
+   Experiment 1's Gaussian model-fit init seed, a single fixed value
+   (§3.3).
 3. **Data separation.** Diagnostics and any out-of-sample quantities are
    computed on independently generated data (Experiment 2's ≥10^5-sample
    diagnostics), never on the fitting data. Ground-truth masks define which
@@ -85,9 +91,11 @@ populations:
 
 - **homogeneous** (`same_dist`): both populations share the cluster-1
   covariance matrix — local structure is identical everywhere.
-- **nondisjoint**: population 2 uses *overlapping* groups; each group retains
-  3 members of a population-1 group and takes 2 members from the preceding
-  group. Structure differs locally but groups share variables.
+- **nondisjoint**: population 2 redistributes the same variables into
+  different groups. Groups remain **disjoint within each population**; the
+  "overlap" is *between the populations*: each population-2 group shares
+  3 members with the corresponding population-1 group and takes 2 members
+  from the preceding one (Appendix A has the exact partition).
 - **disjoint**: each population-2 group takes exactly one member from every
   population-1 group — groups exist in both regions but are structurally
   incompatible.
@@ -96,7 +104,17 @@ Population means are group-specific fixed vectors; a **separation
 parameter α ∈ [0, 1]** interpolates the population-2 mean between the two
 mean vectors (α = 0: identical means; α = 1: fully separated). This stages
 "the regions differ in mean" independently of "the regions differ in
-covariance structure".
+covariance structure". Interpretively, only the homogeneous regime at
+**α = 0 is a clean no-heterogeneity control**: pooling two equal-weight
+populations with different means inflates the marginal covariance to
+Σ + (α²/4)(μ₁ − μ₀)(μ₁ − μ₀)ᵀ — a rank-one mixture term that, because the
+mean vectors differ by group, also introduces pooled between-group
+covariance even though within-region covariance is unchanged by the
+interpolation. At α = 0 the homogeneous regime tests whether localization
+is unnecessary and what it costs in sample size; at α > 0 it tests
+recovery under shared covariance with mean heterogeneity, where
+localization can legitimately improve the fit by removing the mixture
+effect. Results at α > 0 should be read with that distinction.
 
 Optionally, **p_n independent nuisance variables** are appended (variances
 cycling through the signal-variance scale; zero covariance), which grow
@@ -122,8 +140,12 @@ partition time.
 ### 3.3 Model fitting
 
 Each region (and the pooled data for the global baseline) is fit with
-**Linear CorEx** requesting **M = 5 factors** (`gaussianize='outliers'`,
-fixed seed 42 for model inits). In the dedicated `bio_check` configuration
+**Linear CorEx** requesting **M = 5 factors** (`gaussianize='outliers'`).
+Every Gaussian fit uses a **single fixed init seed (42)** — a deliberate,
+documented exception to the derived-seed convention (§2): the init is not
+condition-derived, so the same init basis is reused across conditions
+(switching to derived per-fit seeds is a flagged follow-up item,
+Appendix E). In the dedicated `bio_check` configuration
 the **Bio CorEx** estimator (discrete marginals, `dim_hidden = 2`,
 `smooth_marginals = False`) replaces it to demonstrate estimator-agnostic
 behavior. Every fit is scored against the region's true factor supports.
@@ -138,9 +160,12 @@ vectors. Scoring proceeds in three steps:
 1. **Pairing scores.** All (true group, learned factor) pairs are scored by
    average precision (AUPRC, using factor scores as the ranking), by
    prevalence-adjusted AUPRC, and by cosine distance.
-2. **Matching.** Factors are matched to groups **once**, maximizing AUPRC,
-   by the Hungarian assignment. This single assignment feeds every other
-   metric.
+2. **Matching.** Factors are matched to groups **once**, by the Hungarian
+   assignment; the standardized **primary objective is max cosine
+   similarity** — the same rule as Experiment 2 — while AUPRC is still
+   computed and reported as the experiment-specific ranking metric.
+   *(Code pending: the Gaussian implementation currently maximizes AUPRC —
+   see Appendix E.)* This single assignment feeds every other metric.
 3. **Matched metrics.**
    - *matched AUPRC* and matched cosine similarity;
    - *top-k F1* at k = the true group size (support recovery: how much of
@@ -153,7 +178,19 @@ vectors. Scoring proceeds in three steps:
      **learned factors** — penalizes extra factors), and their harmonic
      mean (the balanced summary), all in AUPRC and cosine versions;
    - directional diagnostics (best-matching group per factor and vice
-     versa) as lower bounds on recoverable performance.
+     versa) as **optimistic references** for matching performance — they
+     relax the one-to-one constraint, so they upper-bound what the matched
+     metrics can reach;
+   - *degenerate handling* (decided; code pending, Appendix E): factors
+     with effectively zero total score (≤ 10⁻¹² for the cumulative-support
+     rule, and otherwise all-zero score columns) receive an **empty
+     predicted support and zero recovery**, their frequency is reported,
+     and averages are additionally shown conditional on valid factors.
+     Remaining score ties must not be resolved in favor of the
+     signal-column layout: the stable descending sort's lower-index
+     tie-break can otherwise award an all-zero factor a perfect top-d
+     result on the first true group (the group occupies the first column
+     block in both experiments).
 
 ### 3.5 Experimental grids (16 paired replicates per condition)
 
@@ -234,14 +271,19 @@ On the standardized pooled data: **oracle** (true labels); **PHATE**
 the standardized variables; and **10 balanced random partitions** (kept
 separate in all outputs — control replicates, not repeats).
 
-Estimated labels are aligned to the truth (Hungarian) only for the recorded
-partition diagnostics. The **fit cell** for an estimated partition is the
-*raw* estimated cluster with maximal overlap with the target region
-(aligned ids never index raw labels — a documented convention, since the
-label map can be a swap). When both regions select the same raw cluster,
-one fit serves both, recorded via `same_cluster_selected`. A collapsed
-k-means output (a single estimated cluster) is recorded as
-`failed_partition` rather than silently dropped.
+Estimated labels are aligned to the truth by the one-to-one Hungarian
+alignment. The **primary rule for choosing the fit cell** of an estimated
+partition is that same one-to-one association: each estimated cluster is
+associated with at most one region and both associated fits are scored —
+using truth only to *align* names, not to *select* a preferred fit.
+The **maximum-overlap selection** (each region independently picking the
+raw estimated cluster containing most of its observations; aligned ids
+never index raw labels — a documented convention, since the label map can
+be a swap — and `same_cluster_selected` recording when both regions pick
+the same cluster) is retained only as a separately labeled diagnostic.
+*(Code pending: max-overlap is currently implemented as the primary rule —
+see Appendix E.)* A collapsed k-means output (a single estimated cluster)
+is recorded as `failed_partition` rather than silently dropped.
 
 ### 4.5 Fit variants
 
@@ -260,8 +302,15 @@ CoreX-input); downstream code reads spec fields and never parses names:
 ### 4.6 Model fitting
 
 **M = 4 requested factors** per fit. Bio CorEx is fit with
-`dim_hidden = 4` (sized to cover the 2^d parity atoms), `max_iter = 200`,
-and `n_repeat = 5` EM restarts keeping the maximum-TC solution; Linear CorEx
+`dim_hidden = 4` — **four states per latent factor**, not bits (in Bio
+CorEx, `dim_hidden` counts each categorical factor's discrete states) —
+`max_iter = 200`, and `n_repeat = 5` EM restarts keeping the
+maximum-TC solution. Four states cover the noiseless 3-variable parity
+groups completely (2^(d−1) = 4 joint patterns) but cannot fully explain
+the 4-variable groups (2^(d−1) = 8 patterns; with flip noise η > 0 all
+2^d joint patterns receive positive probability), so reported parity
+recovery for the 4-variable groups is a partial-recovery measurement at
+this cardinality. Linear CorEx
 with `max_iter = 2000` and `gaussianize='outliers'`. Two hardening rules are
 worth recording: every fit receives an explicit integer seed derived from
 the condition and cell (`hash(root_seed, 'corex', draw, method, cell,
@@ -272,9 +321,15 @@ and identical inputs reproduce bit-for-bit.
 
 ### 4.7 Recovery assessment
 
-Each fit yields the nonnegative association scores a_{ji} = I(Z_j; X_i)
-(raw model scores clipped at zero — the documented transform; for no_routing
-variants re-expanded with zeros at the dropped columns). Factors are matched
+Each fit yields the association scores a_{ji} = I(Z_j; X_i). For Bio
+CorEx these are **not raw MI**: the estimator's stored `mis` are model MI
+estimates (nats) that the implementation bias-corrects against a
+20-permutation bootstrap and thresholds to zero unless they clear the
+permutation significance level — small true-MI entries may therefore be
+reported as 0, which propagates into the cosine and AUPRC inputs. Linear
+CorEx contributes Gaussian MI scores. Our transform clamps remaining
+negatives at zero; for no_routing variants scores are re-expanded with
+zeros at the dropped columns. Factors are matched
 to the four true group masks by the Hungarian assignment **maximizing cosine
 similarity**, then held fixed for all other metrics. Per matched pair:
 
@@ -287,7 +342,12 @@ similarity**, then held fixed for all other metrics. Per matched pair:
   and taking the smallest prefix reaching 80% of the factor's total MI,
   reported with size, density, and F1 against the true group, plus the role
   fractions *within* the support. Factors whose total MI ≤ 10⁻¹² are
-  `support_degenerate`, flagged, and excluded from support metrics.
+  `support_degenerate`, flagged, and excluded from support metrics. The
+  decided degenerate/zero-score semantics (§3.4; code pending) apply here
+  as well; under the current implementation an all-zero factor inherits
+  the first group's columns as its top-d set via the stable sort's
+  lower-index tie-break, which is precisely the artifact this decision
+  removes.
 
 Aggregation is within each replicate fit (a random-partition draw is never
 averaged into another draw; collapsing over draws is left to downstream
@@ -301,20 +361,39 @@ Two diagnostics, run on **100,000 freshly generated observations** per cell
 1. **Structure diagnostic** — certifies the premise of the experiment. Per
    cell: max |Pearson|, max pairwise mutual information (10-bin
    discretization for continuous generators; raw bits for parity), plug-in
-   group TC in bits, and a **permuted-TC control** (one member independently
-   permuted, destroying higher-order structure while preserving marginals;
-   must be ≈ 0). For parity at η = 0 this shows pairwise MI ≈ 0 with
-   group TC = 1 bit; the same separation holds for the sine-sum generator.
+   group TC **of the discretized variables** in bits, and a
+   **permuted-TC null** — permuted members, destroying higher-order
+   structure while preserving marginals. The null is **distributional**:
+   the plug-in TC estimator retains a positive finite-sample bias of order
+   (number of cells)/n (≈ 0.07 bits per factor for four independent 10-bin
+   variables at n = 10⁵), so observed TC is read against a distribution of
+   repeated permutations, never against zero. Parity additionally has the
+   **analytic reference TC = 1 − h₂(η) bits**. For parity at η = 0 the
+   diagnostic shows pairwise MI at the permuted-null level with group TC
+   ≈ 1 bit; the same separation holds for the sine-sum generator. For the
+   **product** generator permuting a single member is *not* a valid null
+   (dependence survives among the remaining members and the response), so
+   the null there requires independently permuting **every** column.
+   *(Code pending: currently one member is permuted, correct as a null for
+   parity/sine; repeated-permutation distributions and the all-column
+   product null — see Appendix E.)*
 2. **Capability diagnostic** — characterizes standard CorEx EM. Standard
-   random-initialization Bio CorEx finds TC ≈ 0 on pure parity groups while
+   random-initialization Bio CorEx frequently attains near-zero explained
+   TC on pure parity groups — with smoke-scale oracle fits still showing
+   partial recovery (AUPRC ≈ 0.45–0.64) — while
    the identical variational family, initialized with a **one-hot latent on
    the joint atom** (a ground-truth-informed init, rows flagged
    `uses_ground_truth_init`), reaches the full parity TC. Seeded rows are a
    *capability statement* and permanently excluded from recovery summaries.
-   Conclusion: the failure of standard CorEx EM on pairwise-independent
+   The conclusion — standard CorEx EM's failure on pairwise-independent
    higher-order structure is an **optimization failure, not an
-   expressiveness failure** — the evidence that motivates discussing
-   initialization-based searches for localized structure.
+   expressiveness failure** — requires the two inits to be matched in
+   *capacity* as well as in family. The decided design (code pending):
+   both inits use a **fixed sufficient cardinality of 2^d states** (8 for
+   d = 3, 16 for d = 4, covering the noisy-parity pattern set), recorded
+   per row, instead of the current asymmetry (standard 4 states vs seeded
+   max(4, 2^d) = 8/16); higher cardinality remains a targeted sensitivity
+   check only.
 
 All model-reported TCs are converted nats → bits before comparison.
 
@@ -347,11 +426,11 @@ once the human pipeline's material is finalized.
 | Marginal variances | [7, 3, 10, 5, 8] repeated per group |
 | Cluster-1 means (per group) | [5, 10, 1, 10, 3] |
 | Cluster-2 means (per group) | [2.5, 6, 3, 1, 10] |
-| Regimes | homogeneous / nondisjoint (3 shared + 2 from preceding group) / disjoint (1 from each group) |
+| Regimes | homogeneous / nondisjoint (groups disjoint within each population; each population-2 group shares 3 members with the corresponding population-1 group + 2 from the preceding) / disjoint (1 from each group) |
 | Mean separation | α ∈ {0, 0.5, 1} interpolating cluster means |
 | Nuisance p_n | 0 (primary); {0, 25, 100, 475} (stress) |
 | Factors M | 5 (sensitivity: 3–7) |
-| Estimator | Linear CorEx (`gaussianize='outliers'`, seed 42); Bio CorEx in `bio_check` |
+| Estimator | Linear CorEx (`gaussianize='outliers'`, single fixed init seed 42); Bio CorEx in `bio_check` |
 | PHATE | 5 components; k-means k = 2 |
 | Random partitions | per dataset, size-preserving |
 | Replicates | 16 per condition (derived seeds) |
@@ -369,7 +448,7 @@ once the human pipeline's material is finalized.
 | Sample sizes n per region | 5000 / 500 (core); 50 (small-n) |
 | Replicates | 16 per condition (parity seed base 2000; continuous 3000) |
 | Factors M | 4 |
-| Bio CorEx | discrete marginals, dim_hidden = 4, max_iter = 200, n_repeat = 5 |
+| Bio CorEx | discrete marginals, dim_hidden = 4 states per factor (§4.6), max_iter = 200, n_repeat = 5 |
 | Linear CorEx | max_iter = 2000 |
 | Discretization | equal-frequency, 10 bins (fixed pre-run rule; bin edges saved) |
 | Standardization | z-scored columns (variance floor 1e-12); near-constant columns pass zeros |
@@ -381,14 +460,25 @@ once the human pipeline's material is finalized.
 ## Appendix B. Metric definitions
 
 **Association scores.** For learned factor Z_j and observed variable X_i,
-the nonnegative score a_{ji} = I(Z_j; X_i). Linear CorEx returns
-−½ log(1 − ρ²_{j,i}) (the Gaussian MI); Bio CorEx returns a discrete MI
-estimate (clipped at zero after raw values are stored). For no_routing
-variants, zero columns are re-inserted at dropped positions.
+the score a_{ji} = I(Z_j; X_i), clamped at zero. Linear CorEx returns
+−½ log(1 − ρ²_{j,i}) (the Gaussian MI, nats). Bio CorEx's stored `mis`
+are *not* raw empirical MI: the implementation bias-corrects them against
+a 20-permutation bootstrap and thresholds them to zero unless they clear
+the permutation significance level, so small true MI entries may be
+reported as 0 — a consequence worth stating wherever cosine and AUPRC are
+interpreted. For no_routing variants, zero columns are re-inserted at
+dropped positions.
 
 **Matching.** Hungarian (one-to-one) assignment of learned factors to true
-groups, maximizing cosine similarity in Experiment 2 and maximum average
-precision in Experiment 1, held fixed for every other metric.
+groups, held fixed for every other metric. The standardized **primary
+objective in both experiments is maximum cosine similarity**; AUPRC is
+additionally computed and reported as Experiment 1's ranking metric
+(§3.4; the Gaussian implementation's switch to cosine is pending code —
+Appendix E). Decided degenerate handling (code pending): zero-score /
+degenerate factors receive an empty predicted support and zero recovery
+scores, their frequency is reported, and averages are also shown
+conditional on valid factors; score ties are never resolved in favor of
+the signal-column layout.
 
 **Per-matched-pair metrics.**
 
@@ -418,6 +508,15 @@ mean of the two. Reported for AUPRC and cosine.
 (max-contingency mass), mapped accuracy (after Hungarian label alignment),
 per-region purity, aligned confusion counts, and partition time.
 
+**Analysis unit.** The 16 replicates are independent generated datasets
+and are the unit of statistical inference. Within a dataset, the 10
+random-partition draws (Experiment 2) are **nested** — kept separate in
+all aggregates, never averaged into another draw — and all methods are
+*paired* on the same data, so method contrasts are computed as paired
+differences across the 16 datasets. Fit statuses (`failed_fit`,
+`failed_partition`) are reported as explicit failure rates rather than
+silently dropped from the analysis.
+
 ## Appendix C. Reproducibility conventions
 
 - **Seeds.** Derived from condition identifiers by sha256 hashing, one seed
@@ -425,8 +524,14 @@ per-region purity, aligned confusion counts, and partition time.
   every individual model fit. No global RNG use; global RNG state is
   saved/restored around CorEx fits (both estimators manipulate it
   internally). Experiment 1 derives data seeds from
-  (rep, n, α, regime, nuisance) tuples; Experiment 2 from the root seed and
-  a purpose tag.
+  (rep, n, α, same_dist, disjoint) tuples — **nuisance count is excluded**,
+  so the signal observations are bitwise identical across nuisance levels
+  (paired nuisance design: nuisance columns are drawn from the same seeded
+  stream *after* the signal draws, and the generator validation asserts
+  paired signal samples across nuisance levels). Experiment 2 derives
+  seeds from the root seed and a purpose tag; its model-fit seeds are
+  derived per cell and cell variant, unlike Experiment 1's fixed fit seed
+  (§3.3).
 - **Batch logging.** `run_log.jsonl` (one JSON line per event) in each
   output directory: `run_start` (UTC timestamp, experiment, repetitions) and
   `run_end` (UTC timestamp, status `completed|failed` even when the run
@@ -452,3 +557,22 @@ defaults. Combined CSVs are rebuilt per experiment after each run.
 separate) and produce the paper figures; Experiment 2's main figure is a
 2 × 3 panel (discrete / continuous rows: AUPRC vs α by partition method;
 Bio vs Linear by noise under oracle fits; the structure-diagnostics panel).
+
+## Appendix E. Follow-up items before final runs
+
+Decisions recorded in this revision whose code changes are still pending.
+The document states the *target* methodology above and flags each such
+passage "(code pending)"; this table is the closing backlog, ordered by
+the reviewer's recommendation that the metric fix, the diagnostic
+cardinality, and a favorable pilot precede any full nonlinear batch.
+
+| # | Item | Where the decision is recorded | Notes |
+|---|---|---|---|
+| 1 | Degenerate / zero-score factor metrics (both pipelines) | §3.4, §4.7, Appendix B | Empty support, zero recovery, reported frequency, conditional-on-valid averages, neutral tie handling. Changes metric outputs → golden-smoke regeneration required |
+| 2 | Capability-diagnostic cardinality | §4.6, §4.8 | Fixed 2^d states (8 / 16) for **both** standard and seeded inits, recorded per row; higher cardinality only as sensitivity. Requires golden-smoke regeneration |
+| 3 | Structure-diagnostic null | §4.8 | Repeated-permutation distributions; all-column permutation null for the product generator; report the analytic parity reference 1 − h₂(η) |
+| 4 | Matching-objective harmonization | §3.4, §4.7, Appendix B | Gaussian Hungarian matching switches to cosine as primary; AUPRC remains computed/reported |
+| 5 | Cluster-selection rule | §4.4 | Hungarian one-to-one alignment becomes the primary fit-cell rule; max-overlap retained as a labeled diagnostic |
+| 6 | Global-capacity controls | §1 | Supplementary grids: Gaussian global M = 10 (vs 5 vs 2 × 5); nonlinear global M = 8 (vs 4 vs 2 × 4). Larger global fits are scored against the concatenated group masks of both regions |
+| 7 | Favorable pilot before full nonlinear grids | §1, §4.8 | Large n, low noise, oracle partition, no_routing, no nuisance; standard vs seeded init; support recovery and explained TC read together. Establishes where localization demonstrably helps vs. characterizes a limitation |
+| 8 | Optional: Gaussian fit seeds | §3.3 | Replace the fixed init seed 42 with derived per-fit seeds (changes results; the fixed seed is retained by default) |
