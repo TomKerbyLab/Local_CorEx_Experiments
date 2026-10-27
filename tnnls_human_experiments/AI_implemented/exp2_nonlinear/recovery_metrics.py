@@ -14,7 +14,16 @@ and 02_nonlinear_higher_order_recovery.md:
   factor, take the smallest prefix reaching the requested share of total MI
   (spec convention: the denominator is the total over all variables). A
   factor whose total MI is at most 1e-12 nats is degenerate, flagged, and
-  never enters support metrics.
+  scored — never excluded from averages: empty support, support
+  precision/recall/F1/Jaccard 0, cosine 0, raw AUPRC left at its natural
+  value (the group prevalence), adjusted AUPRC 0. Degenerate factors enter
+  the primary support-recovery averages as zeros; conditional-on-valid
+  averages are reported alongside.
+- Neutral tie handling: score ties are broken by a seeded permutation of
+  the columns, not by variable position. The stable sort's lower-index
+  tie-break would award an all-zero factor a perfect top-d result on the
+  first true group (groups occupy leading column blocks in both
+  experiments).
 """
 
 from dataclasses import dataclass
@@ -25,6 +34,7 @@ from sklearn.metrics import average_precision_score
 
 DEGENERATE_MI_SUM = 1e-12
 SUPPORT_FRACTION = 0.80
+DEFAULT_TIE_SEED = 0  # fixed neutral tie order: reproducible, layout-free
 
 
 @dataclass
@@ -49,12 +59,51 @@ def safe_cosine(first, second):
     return float(first @ second / (norm_first * norm_second))
 
 
-def cumulative_mi_support(scores, fraction=SUPPORT_FRACTION):
+def _descending_order(scores, tie_seed=DEFAULT_TIE_SEED):
+    """Column indexes by descending score with neutral tie handling.
+
+    Score ties are broken by a seeded permutation of the columns before the
+    stable descending sort, so the tie order has no relation to the variable
+    layout (the lower-index stable tie-break instead hands an all-tied —
+    e.g. all-zero — factor the leading true group as its top-d set).
+    ``tie_seed=None`` keeps the lower-index stable rule (legacy behavior).
+    """
+    scores = np.asarray(scores, dtype=float)
+    if tie_seed is None:
+        return np.argsort(-scores, kind='stable')
+    rng = np.random.default_rng(tie_seed)
+    column_order = rng.permutation(len(scores))
+    ordered_positions = np.argsort(-scores[column_order], kind='stable')
+    return column_order[ordered_positions]
+
+
+def _pair_tie_seed(tie_seed, learned_index, true_index):
+    """Deterministic per-assignment tie seed (varies across pairs)."""
+    if tie_seed is None:
+        return None
+    return int(np.random.default_rng(
+        (int(tie_seed), int(learned_index), int(true_index))
+    ).integers(0, 2**31 - 1))
+
+
+def _factor_tie_seed(tie_seed, learned_index):
+    """Deterministic per-factor tie seed (for the factor's own support)."""
+    if tie_seed is None:
+        return None
+    return int(np.random.default_rng(
+        (int(tie_seed), int(learned_index))
+    ).integers(0, 2**31 - 1))
+
+
+def cumulative_mi_support(scores, fraction=SUPPORT_FRACTION,
+                          tie_seed=DEFAULT_TIE_SEED):
     """Smallest score prefix reaching the requested share of total MI.
 
-    Scores are sorted descending (ties broken by lower index, stable) and
-    the cumulative share is measured against the sum over ALL variables of
-    the nonnegative scores, per the README support definition.
+    Scores are sorted descending (ties broken by the seeded neutral order)
+    and the cumulative share is measured against the sum over ALL variables
+    of the nonnegative scores, per the README support definition. A factor
+    with total MI at most DEGENERATE_MI_SUM (or non-finite) is degenerate:
+    empty support, and the caller scores it as zeros.
     """
     scores = np.maximum(np.asarray(scores, dtype=float), 0.0)
     total = float(scores.sum())
@@ -66,7 +115,7 @@ def cumulative_mi_support(scores, fraction=SUPPORT_FRACTION):
             indexes=(),
             degenerate=True,
         )
-    order = np.argsort(-scores, kind='stable')
+    order = _descending_order(scores, tie_seed)
     sorted_scores = scores[order]
     cumulative = np.cumsum(sorted_scores) / total
     prefix = int(np.searchsorted(cumulative, fraction - 1e-12, side='left')) + 1
@@ -80,12 +129,17 @@ def cumulative_mi_support(scores, fraction=SUPPORT_FRACTION):
     )
 
 
-def top_d_metrics(scores, truth, d):
-    """Precision/recall/F1/Jaccard of the top-d scoring variables."""
+def top_d_metrics(scores, truth, d, tie_seed=DEFAULT_TIE_SEED):
+    """Precision/recall/F1/Jaccard of the top-d scoring variables.
+
+    Ties at the d-th score are broken by the seeded neutral order, so an
+    all-tied factor's top-d set is a random (reproducible) subset rather
+    than the leading columns.
+    """
     truth = np.asarray(truth, dtype=bool)
     scores = np.asarray(scores, dtype=float)
     d = min(d, len(scores))
-    top_indexes = np.argsort(-scores, kind='stable')[:d]
+    top_indexes = _descending_order(scores, tie_seed)[:d]
     predicted = np.zeros_like(truth)
     predicted[top_indexes] = True
     tp = int((predicted & truth).sum())
@@ -172,7 +226,8 @@ def auprc(scores, truth):
 
 def match_factors_to_groups(factor_scores, groups, nuisance_mask=None,
                             routing_mask=None,
-                            support_fraction=SUPPORT_FRACTION):
+                            support_fraction=SUPPORT_FRACTION,
+                            tie_seed=DEFAULT_TIE_SEED):
     """Match learned factors to true groups on maximum cosine similarity.
 
     Signature follows the reference convention: learned factor scores first
@@ -182,6 +237,17 @@ def match_factors_to_groups(factor_scores, groups, nuisance_mask=None,
     divides the matched cosine sum by the number of true groups (penalizes
     missing groups); precision divides by the number of learned factors
     (penalizes extra factors); their harmonic mean gives a balanced summary.
+
+    Degenerate factors (total nonnegative score <= DEGENERATE_MI_SUM) score
+    an empty support: support precision/recall/F1/Jaccard 0, cosine 0, raw
+    AUPRC left at the group prevalence, adjusted AUPRC 0. They enter the
+    primary support averages as zeros; ``matched_support_*_valid`` and
+    ``num_support_valid`` hold the conditional-on-valid averages.
+
+    ``tie_seed`` drives neutral tie handling (see _descending_order); each
+    assignment and each factor's support get reproducible sub-seeds
+    derived from it, so an all-tied factor's top-d/support are layout-free
+    random subsets.
     """
     groups = np.asarray(groups, dtype=float)
     factor_scores = np.asarray(factor_scores, dtype=float)
@@ -216,12 +282,18 @@ def match_factors_to_groups(factor_scores, groups, nuisance_mask=None,
         group = groups[true_index]
         factor = factor_scores[learned_index]
         group_size = int(np.sum(group > 0))
-        top = top_d_metrics(factor, group > 0, d=group_size)
-        support = cumulative_mi_support(factor, support_fraction)
+        top = top_d_metrics(
+            factor, group > 0, d=group_size,
+            tie_seed=_pair_tie_seed(tie_seed, learned_index, true_index))
+        support = cumulative_mi_support(
+            factor, support_fraction,
+            tie_seed=_factor_tie_seed(tie_seed, learned_index))
         support_metrics = (
             support_vs_truth_metrics(support.indexes, group > 0)
             if not support.degenerate
-            else {'f1': 0.0}
+            else {
+                'precision': 0.0, 'recall': 0.0, 'f1': 0.0, 'jaccard': 0.0,
+            }
         )
         nuisance_leakage = role_fractions(
             factor, nuisance_mask, top['top_indexes'], support)
@@ -248,7 +320,10 @@ def match_factors_to_groups(factor_scores, groups, nuisance_mask=None,
             'top_d_routing_fraction': routing_leakage['top_fraction'],
             'support_size': support.size,
             'support_density': support.density,
+            'support_precision': float(support_metrics['precision']),
+            'support_recall': float(support_metrics['recall']),
             'support_f1': float(support_metrics['f1']),
+            'support_jaccard': float(support_metrics['jaccard']),
             'support_nuisance_fraction': nuisance_leakage['support_fraction'],
             'support_routing_fraction': routing_leakage['support_fraction'],
             'support_degenerate': bool(support.degenerate),
@@ -326,6 +401,19 @@ def match_factors_to_groups(factor_scores, groups, nuisance_mask=None,
         result[output_field] = float(np.mean(values)) if values else 0.0
     result['matched_support_degenerate_fraction'] = float(np.mean([
         assignment['support_degenerate'] for assignment in assignments]))
+    # conditional-on-valid support averages: degenerate factors contribute
+    # zeros to the primary averages above and are excluded here instead
+    valid_supports = [
+        assignment for assignment in assignments
+        if not assignment['support_degenerate']
+    ]
+    result['num_support_valid'] = len(valid_supports)
+    for support_field in ('support_f1', 'support_size', 'support_density'):
+        values = [
+            assignment[support_field] for assignment in valid_supports]
+        output_field = f'matched_{support_field}_valid'
+        result[output_field] = (
+            float(np.mean(values)) if values else float('nan'))
     return result
 
 
@@ -377,11 +465,47 @@ def validate_recovery_metrics():
     assert leaky['matched_nuisance_score_fraction'] > 0.0
     assert leaky['matched_support_nuisance_fraction'] > 0.0
 
-    # degenerate factor: no MI at all
+    # degenerate factor: no MI at all — full per-quantity semantics
     degenerate_scores = np.zeros((1, 20))
     degenerate = match_factors_to_groups(degenerate_scores, groups)
-    assert degenerate['assignments'][0]['support_degenerate'] is True
-    assert degenerate['assignments'][0]['support_size'] == 0
+    degenerate_assignment = degenerate['assignments'][0]
+    assert degenerate_assignment['support_degenerate'] is True
+    assert degenerate_assignment['support_size'] == 0
+    assert all(
+        degenerate_assignment[field] == 0.0
+        for field in ('support_precision', 'support_recall', 'support_f1',
+                      'support_jaccard', 'cosine_similarity',
+                      'adjusted_average_precision')
+    )
+    # raw AUPRC stays at its natural value (the group prevalence): group 0
+    # spans 3 of 20 columns, and constant scores rank it at prevalence
+    assert np.isclose(
+        degenerate_assignment['average_precision'], 3 / 20)
+    # a group prevalence of 1 would make adjusted AP undefined
+    assert degenerate['matched_support_f1'] == 0.0  # zeros in the primary average
+    assert np.isnan(degenerate['matched_support_f1_valid'])  # no valid supports
+    assert degenerate['num_support_valid'] == 0
+
+    # neutral tie handling: the all-zero factor's top-d no longer inherits
+    # the leading group, and identical inputs reproduce identical results
+    assert degenerate_assignment['top_d_f1'] < 1.0
+    repeat = match_factors_to_groups(degenerate_scores, groups)
+    repeat_assignment = repeat['assignments'][0]
+    assert repeat_assignment['top_d_f1'] == (
+        degenerate_assignment['top_d_f1'])
+    assert repeat_assignment['top_d_jaccard'] == (
+        degenerate_assignment['top_d_jaccard'])
+
+    # mixed valid + degenerate: the degenerate factor occupies a matched
+    # slot, so the primary average includes its zero while the
+    # conditional-on-valid average excludes it
+    mixed_scores = groups.copy()
+    mixed_scores[1] = 0.0
+    mixed = match_factors_to_groups(mixed_scores, groups)
+    assert np.isclose(mixed['matched_support_f1'], 3 / 4)
+    assert np.isclose(mixed['matched_support_f1_valid'], 1.0)
+    assert mixed['num_support_valid'] == 3
+    assert np.isclose(mixed['matched_support_degenerate_fraction'], 0.25)
 
     # Hungarian never assigns a learned factor twice
     rng = np.random.default_rng(0)
@@ -400,5 +524,8 @@ def validate_recovery_metrics():
         'extra_factor_penalty_checked': True,
         'nuisance_leakage_checked': True,
         'degenerate_support_checked': True,
+        'degenerate_semantics_checked': True,
+        'neutral_tie_handling_checked': True,
+        'conditional_support_averages_checked': True,
         'no_factor_reuse_checked': True,
     }

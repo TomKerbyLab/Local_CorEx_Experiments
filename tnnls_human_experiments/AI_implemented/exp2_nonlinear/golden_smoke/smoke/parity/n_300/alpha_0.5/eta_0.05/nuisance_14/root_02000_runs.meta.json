@@ -15,7 +15,8 @@
     "corex_inputs": [
       "with_routing"
     ],
-    "native_gaussian_bio": false
+    "native_gaussian_bio": false,
+    "repetitions": 1
   },
   "defaults": {
     "n_factors": 4,

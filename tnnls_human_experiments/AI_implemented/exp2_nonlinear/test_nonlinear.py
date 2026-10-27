@@ -193,14 +193,30 @@ def test_partition_masks_select_true_region():
             (region == served_region)[cell['rows']].all()
             for served_region in cell['regions']
         )
-    # collapsed partition: one cell serving both regions
-    collapsed = runner.estimated_cells(
-        {**fake_partition, 'predicted_labels': np.zeros(8, dtype=int)},
-        region, method='raw_kmeans',
-    )
-    assert len(collapsed) == 1
-    assert collapsed[0]['regions'] == (0, 1)
-    assert collapsed[0]['fields']['same_cluster_selected'] is True
+    # a pure label swap: the Hungarian and max-overlap choices coincide
+    assert all(
+        cell['fields']['max_overlap_matches_hungarian'] for cell in cells)
+    # Hungarian primary cluster selection: every region is served by a
+    # distinct raw cluster even when unconstrained max-overlap would pick
+    # the same one for both (the retired rule survives as two diagnostic
+    # fields); a collapsed single-cluster partition can never reach this
+    # code path (match_partition_to_truth raises earlier), so it is not
+    # simulated here.
+    tied_labels = np.array([0, 0, 1, 1, 0, 0, 1, 1])
+    tied_partition = {
+        'predicted_labels': tied_labels,
+        'ari': 0.0, 'purity': 0.5, 'mapped_accuracy': 0.5,
+    }
+    cells = runner.estimated_cells(
+        tied_partition, region, method='raw_kmeans')
+    assert len(cells) == 2
+    assert sorted(
+        (cell['region_id'], cell['regions']) for cell in cells
+    ) == [(0, (0,)), (1, (1,))]
+    assert cells[0]['fields']['max_overlap_same_cluster'] is True
+    assert cells[0]['fields']['max_overlap_matches_hungarian'] is False
+    assert cells[1]['fields'] is cells[0]['fields'] or (
+        cells[1]['fields'] == cells[0]['fields'])
     # all cell builders share the uniform shape
     dataset_labels = region
     for builder_cells in (
@@ -263,7 +279,11 @@ def test_structure_diagnostics_parity():
         'parity', 3, 0.0, n=100_000, seed=11)
     assert diagnostics['max_pairwise_mi_bits'] < 0.01
     assert diagnostics['group_tc_bits'] == pytest.approx(1.0, abs=0.02)
-    assert diagnostics['permuted_group_tc_bits'] < 0.01
+    assert diagnostics['analytic_tc_bits'] == pytest.approx(1.0)
+    assert diagnostics['permuted_one_tc_mean_bits'] < 0.01
+    assert diagnostics['permuted_all_tc_mean_bits'] < 0.01
+    assert diagnostics['n_permutations'] == (
+        structure_diagnostics.PERMUTATION_NULL_REPEATS)
 
 
 def test_structure_diagnostics_sine_sum():
@@ -272,14 +292,28 @@ def test_structure_diagnostics_sine_sum():
     assert diagnostics['max_abs_pearson'] < 0.05
     assert diagnostics['max_pairwise_mi_bits'] < 0.02
     assert diagnostics['group_tc_bits'] > 0.1
-    assert diagnostics['permuted_group_tc_bits'] < (
+    assert np.isnan(diagnostics['analytic_tc_bits'])
+    assert diagnostics['permuted_one_tc_mean_bits'] < (
         0.6 * diagnostics['group_tc_bits'])
+
+
+def test_product_structure_alive_under_one_column_permutation():
+    # Product keeps pairwise structure when one member is permuted (its
+    # remaining generators still share marginals pairwise), so its proper
+    # null is the all-column permutation, which drops the TC to ~0.
+    diagnostics = structure_diagnostics.structure_diagnostics(
+        'product', 4, 0.20, n=50_000, seed=13)
+    assert diagnostics['permuted_all_tc_mean_bits'] < (
+        0.5 * diagnostics['permuted_one_tc_mean_bits'])
+    # the one-column null keeps the pairwise-alive TC partly intact
+    assert diagnostics['permuted_one_tc_mean_bits'] > 0.1
 
 
 def test_capability_diagnostic_std_finds_nothing_seeded_reaches_parity():
     # Capability statement: standard EM inits find TC ~ 0 on pure parity
-    # while the atom-seeded init reaches the full parity TC (d - 1 bits),
-    # so the failure is optimization, not expressiveness. Seeded rows never
+    # while the atom-seeded init reaches the near-parity TC, at the SAME
+    # sufficient cardinality (2^d states) for both inits — so the failure
+    # is optimization, not expressiveness or capacity. Seeded rows never
     # enter recovery summaries.
     row = structure_diagnostics.capability_diagnostic(3, 0.0, 20_000, seed=1)
     standard_tc = row['std_init_tc_bits']
@@ -288,6 +322,30 @@ def test_capability_diagnostic_std_finds_nothing_seeded_reaches_parity():
     assert seeded_tc > 0.5  # 1 bit target; tolerance for EM drift
     assert row['uses_ground_truth_init'] is True
     assert row['true_tc_bits'] == 1.0
+    assert row['dim_hidden_states'] == 8
+    assert row['analytic_tc_bits'] == pytest.approx(1.0)
+
+
+def test_degenerate_factor_neutral_tie_handling():
+    # The old lower-index stable tie-break handed an all-zero factor a
+    # perfect top-d result on the leading true group; neutral (seeded)
+    # ties make its top-d a reproducible, layout-free subset instead.
+    groups = np.zeros((4, 15))
+    groups[0, [0, 1, 2]] = 1.0   # leading block: legacy F1 = 1.0
+    groups[1, [3, 4, 5]] = 1.0
+    groups[2, [6, 7, 8, 9]] = 1.0
+    groups[3, [10, 11, 12, 13]] = 1.0
+    zero_factors = np.zeros((4, 15))
+    legacy = recovery_metrics.match_factors_to_groups(
+        zero_factors, groups, tie_seed=None)
+    assert legacy['matched_top_d_f1'] == 0.25  # exactly the leading group
+    neutral = recovery_metrics.match_factors_to_groups(zero_factors, groups)
+    assert all(
+        assignment['top_d_f1'] < 1.0
+        for assignment in neutral['assignments']
+    )
+    repeat = recovery_metrics.match_factors_to_groups(zero_factors, groups)
+    assert repeat['matched_top_d_f1'] == neutral['matched_top_d_f1']
 
 
 def test_condition_grids_match_spec():

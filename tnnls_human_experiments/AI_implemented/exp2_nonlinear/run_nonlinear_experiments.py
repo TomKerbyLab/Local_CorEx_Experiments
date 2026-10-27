@@ -12,20 +12,24 @@ Cell semantics per condition:
 - global:     one fit on all observations, matched independently per region
 - oracle:     one fit per true region
 - phate:      PHATE(10d) + k-means (k=2, n_init=50); one fit per RAW
-              cluster selected by largest true-region overlap
+              cluster, assigned to true regions by one-to-one Hungarian
+              selection maximizing total region-cluster overlap
 - raw_kmeans: k-means directly on the standardized variables, same rule
 - random:     10 balanced random partitions (draws are kept separate in all
               outputs; they are control replicates, not repeats)
 
 The cell used for an estimated partition is the RAW estimated cluster (its
-unmodified label id) with the largest overlap with the true region — the
-aligned region id must never index raw labels, since the two differ under a
-label swap. When both regions select the same cluster, both are scored
-against that single fit and the fact is recorded via
-``same_cluster_selected``.
+unmodified label id) — the aligned region id must never index raw labels,
+since the two differ under a label swap. Each region is served by exactly
+one distinct raw cluster under the one-to-one Hungarian rule (the decided
+primary rule); the unconstrained per-region max-overlap selection is
+retained only as a diagnostic (``max_overlap_same_cluster`` records the
+old rule's two-regions-one-cluster event, ``max_overlap_matches_hungarian``
+records whether the two rules coincide).
 
 Scoring uses the nonnegative association scores a_{ji} = I(Z_j; X_i)
-(raw model scores clipped at zero — the documented transform) and
+(Bio CorEx ``mis`` are permutation-bias-corrected and thresholded upstream
+inside local_corex, then clipped at zero — the documented transform) and
 Hungarian matching on cosine similarity (spec 00/02). For 'no_routing'
 variants the association matrix is re-expanded to full width with zeros at
 the dropped routing positions before scoring; routing false positives are
@@ -40,6 +44,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from scipy.optimize import linear_sum_assignment
 
 # result_io lives in ../synthetic; APPEND (not insert) so the sibling
 # modules there can never shadow this directory's same-named modules
@@ -78,7 +83,8 @@ RUN_COLUMNS = [
     'n_factors', 'partition_method', 'partition_draw', 'region',
     'estimator', 'corex_input',
     'partition_ari', 'partition_purity', 'partition_accuracy',
-    'region_purity', 'cluster_size', 'same_cluster_selected',
+    'region_purity', 'cluster_size', 'max_overlap_same_cluster',
+    'max_overlap_matches_hungarian',
     'fit_status', 'runtime_s', 'corex_converged', 'n_factors_valid',
     'total_tc', 'note',
 ]
@@ -90,7 +96,8 @@ MATCH_COLUMNS = [
     'learned_factor', 'true_group', 'factor_tc', 'cosine', 'auprc',
     'topd_precision', 'topd_recall', 'topd_f1', 'topd_jaccard',
     'routing_fp', 'nuisance_fp', 'support_size', 'support_density',
-    'support_f1', 'routing_fp_support', 'nuisance_fp_support',
+    'support_precision', 'support_recall', 'support_f1', 'support_jaccard',
+    'routing_fp_support', 'nuisance_fp_support',
     'support_degenerate',
 ]
 
@@ -274,26 +281,44 @@ def oracle_cells(dataset):
 
 
 def estimated_cells(partition_result, true_labels, method, draw=0):
-    """Data-driven cells for one estimated partition.
+    """Data-driven cells for one estimated partition (Hungarian primary).
 
-    Each true region is served by the RAW cluster with maximal overlap
-    (labels are never re-aligned; raw-label slicing must stay valid — the
-    raw-vs-aligned regression). A cluster selected by BOTH regions yields
-    ONE cell serving both (recorded via ``same_cluster_selected``).
+    Each true region is served by exactly one RAW estimated cluster,
+    chosen by the one-to-one Hungarian assignment that maximizes the total
+    region-cluster overlap — the decided primary search rule. Labels are
+    never re-aligned; raw-label slicing must stay valid (the
+    raw-vs-aligned regression). The previous unconstrained per-region
+    max-overlap rule is retained only as a diagnostic, recorded in the
+    cell fields:
+    ``max_overlap_same_cluster`` — the old rule would have picked ONE
+    cluster for both regions (possible only there; the one-to-one rule
+    never shares a cluster);
+    ``max_overlap_matches_hungarian`` — the per-region argmax choices
+    coincide with the Hungarian assignments.
     """
     true_labels = np.asarray(true_labels)
     predicted = np.asarray(partition_result['predicted_labels'])
     cluster_ids = np.unique(predicted)
-    selected = {}
-    for region in np.unique(true_labels):
-        overlaps = [
-            int(np.sum((predicted == cluster) & (true_labels == region)))
-            for cluster in cluster_ids
-        ]
-        selected[int(region)] = (
-            int(cluster_ids[int(np.argmax(overlaps))])
-            if sum(overlaps) > 0 else None
-        )
+    regions = np.unique(true_labels)
+    contingency = np.array([
+        [int(np.sum((predicted == cluster) & (true_labels == region)))
+         for cluster in cluster_ids]
+        for region in regions
+    ])
+    region_indexes, cluster_indexes = linear_sum_assignment(-contingency)
+    selected = {
+        int(regions[region_index]): (
+            int(cluster_ids[cluster_index])
+            if contingency[region_index, cluster_index] > 0 else None)
+        for region_index, cluster_index in zip(
+            region_indexes, cluster_indexes)
+    }
+    max_overlap = {
+        int(region): (
+            int(cluster_ids[int(np.argmax(contingency[region_index]))])
+            if contingency[region_index].sum() > 0 else None)
+        for region_index, region in enumerate(regions)
+    }
     served = {}
     for region in sorted(selected):
         served.setdefault(selected[region], []).append(region)
@@ -301,9 +326,10 @@ def estimated_cells(partition_result, true_labels, method, draw=0):
         'partition_ari': partition_result['ari'],
         'partition_purity': partition_result['purity'],
         'partition_accuracy': partition_result['mapped_accuracy'],
-        'same_cluster_selected': (
-            selected.get(0) is not None
-            and selected.get(0) == selected.get(1)),
+        'max_overlap_same_cluster': (
+            max_overlap.get(0) is not None
+            and max_overlap.get(0) == max_overlap.get(1)),
+        'max_overlap_matches_hungarian': selected == max_overlap,
     }
     return [
         {
@@ -555,7 +581,10 @@ def score_region_fit(base_row, fit, region):
             'nuisance_fp': assignment['top_d_nuisance_fraction'],
             'support_size': assignment['support_size'],
             'support_density': assignment['support_density'],
+            'support_precision': assignment['support_precision'],
+            'support_recall': assignment['support_recall'],
             'support_f1': assignment['support_f1'],
+            'support_jaccard': assignment['support_jaccard'],
             'routing_fp_support': (
                 assignment['support_routing_fraction']
                 if fit['dropped'] is None else None),
@@ -594,7 +623,8 @@ def run_condition(condition, config, defaults):
         'partition_ari': np.nan,
         'partition_purity': np.nan,
         'partition_accuracy': np.nan,
-        'same_cluster_selected': np.nan,
+        'max_overlap_same_cluster': np.nan,
+        'max_overlap_matches_hungarian': np.nan,
         'region_purity': np.nan,
         'cluster_size': np.nan,
     })

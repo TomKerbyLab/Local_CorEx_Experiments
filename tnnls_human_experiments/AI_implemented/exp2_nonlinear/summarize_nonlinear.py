@@ -187,8 +187,9 @@ def make_main_figure(summary, diagnostics=None, output_path=None,
     """2 generators x 3 panels: AUPRC vs alpha, AUPRC vs noise, diagnostics.
 
     Diagnostics need structure_diagnostics.csv columns
-    (generator, group_size, noise, group_tc_bits, permuted_group_tc_bits);
-    the panel is skipped when the file is absent.
+    (generator, group_size, noise, group_tc_bits,
+    permuted_one_tc_mean_bits); the panel is skipped when the file is
+    absent.
     """
     present = set(summary['generator'])
     generators = [g for g in ('parity', 'sine_sum') if g in present]
@@ -267,8 +268,9 @@ def make_main_figure(summary, diagnostics=None, output_path=None,
                     color=SERIES_COLORS[0], label='group TC',
                 )
                 ax_diag.bar(
-                    positions + width / 2, diag['permuted_group_tc_bits'],
-                    width, color=SERIES_COLORS[2], label='permuted TC',
+                    positions + width / 2,
+                    diag['permuted_one_tc_mean_bits'],
+                    width, color=SERIES_COLORS[2], label='permuted TC (mean)',
                 )
                 ax_diag.set_xticks(positions)
                 ax_diag.set_xticklabels(

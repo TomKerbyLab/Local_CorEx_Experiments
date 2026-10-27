@@ -22,7 +22,9 @@ DEFAULTS = {
     'n_bins': 10,               # fixed pre-run discretization rule
     'support_fraction': recovery_metrics.SUPPORT_FRACTION,
     'bio_max_iter': 200,
-    'bio_dim_hidden': 4,        # >= 2^group-capacity for parity groups
+    'bio_dim_hidden': 4,        # states per latent factor (main grid; the
+                                # 2^d-state comparison is the capability
+                                # diagnostic's, not this grid's)
     'bio_n_repeat': 5,          # EM restarts (escape trivial basins)
     'linear_max_iter': 2000,
     'native_gaussian_bio': True,  # continuous secondary variant
@@ -61,6 +63,14 @@ EXPERIMENTS = {
         'corex_inputs': BASE_COREX_INPUTS,
         'native_gaussian_bio': False,
     },
+}
+
+# global-capacity control grid (capacity_experiment.py); deliberately kept
+# out of EXPERIMENTS so the runner's argparse choices stay unchanged
+CAPACITY_CONFIG = {
+    'estimators': BASE_ESTIMATORS,
+    'corex_inputs': BASE_COREX_INPUTS,
+    'native_gaussian_bio': False,
 }
 
 # ---------------------------------------------------------------------------

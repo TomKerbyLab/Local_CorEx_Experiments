@@ -8,24 +8,38 @@ observations (independent of the fitting data; data separation):
    - max |Pearson correlation| within the group,
    - max pairwise MI (10-bin equal-frequency discretization for continuous
      generators; raw bits for parity),
-   - group TC (plug-in, bits),
-   - permuted TC (plug-in TC after independently permuting one member,
-     bits): an independence check that removes the higher-order structure
-     while preserving marginals, and must be ~ 0.
+   - group TC (plug-in, bits, of the discretized variables),
+   - the analytic TC for parity (1 - h2(eta) bits: the flip noise leaves
+     the parity constraint with 2^(d-1) equiprobable atoms),
+   - permutation-null DISTRIBUTIONS of the plug-in TC, not single values:
+     the plug-in TC of independent discrete marginals has an O(cells / n)
+     positive bias (~0.07 bits at n = 10^5 for ten-bin marginals), so a
+     single permuted draw cannot be read as "must be exactly zero". Two
+     null variants are computed over PERMUTATION_NULL_REPEATS repetitions:
+     one member permuted independently (destroys the joint structure of a
+     group whose members are otherwise exchangeable — the null for parity
+     and sine-sum) and every column permuted independently (the null for
+     product, whose remaining generators keep pairwise structure alive
+     under a one-column permutation).
 
 2. ``capability_diagnostic``: shows that the failure of standard CorEx EM
    to find parity structure is an optimization failure, not an
    expressiveness failure of the variational family:
    (a) standard random inits find TC ~ 0 on pure parity groups, while
    (b) a latent initialized one-hot on the joint atom (the ground-truth
-       grouping of samples) reaches the full parity TC (1 bit for every
-       d >= 2: the parity constraint leaves 2^(d-1) equiprobable atoms).
-   Rows from (b) are labeled uses_ground_truth_init and must NEVER enter
-   recovery-metric summaries: they are a capability statement only.
+       grouping of samples) reaches the near-parity TC.
+   BOTH inits run at the same sufficient cardinality, 2^d states per
+   latent factor (8 for d = 3, 16 for d = 4; recorded per row), so the
+   comparison is not confounded by capacity. 2^d is sufficient and
+   conservative — noisy parity is representable with 2^(d-1) states
+   already (take Z = (B_1, ..., B_{d-1})) — and the conclusion is scoped
+   to this tested cardinality. Rows from (b) are labeled
+   uses_ground_truth_init and must NEVER enter recovery-metric summaries:
+   they are a capability statement only.
 
 Unit convention: the plugin TC here is computed in bits. local_corex
 reports model.tcs in NATS, so the capability diagnostic converts model TCs
-to bits (divide by ln 2) before comparing to the d - 1 bit parity truth.
+to bits (divide by ln 2) before comparing to the parity reference.
 """
 
 import numpy as np
@@ -40,8 +54,8 @@ LN_2 = np.log(2.0)
 GROUP_SIZES = (3, 4)
 DIAGNOSTIC_N = 100_000
 BIO_MAX_ITER = 200
-BIO_DIM_HIDDEN = 4
 BIO_N_REPEAT = 5
+PERMUTATION_NULL_REPEATS = 50
 
 DIAGNOSTIC_CONDITIONS = (
     [('parity', d, eta) for d in GROUP_SIZES for eta in (0.0, 0.05, 0.15)]
@@ -52,14 +66,26 @@ DIAGNOSTIC_CONDITIONS = (
 
 STRUCTURE_COLUMNS = [
     'generator', 'group_size', 'noise', 'n', 'max_abs_pearson',
-    'max_pairwise_mi_bits', 'group_tc_bits', 'permuted_group_tc_bits',
-    'permuted_max_pairwise_mi_bits',
+    'max_pairwise_mi_bits', 'group_tc_bits', 'analytic_tc_bits',
+    'permuted_one_tc_mean_bits', 'permuted_one_tc_sd_bits',
+    'permuted_one_tc_q95_bits', 'permuted_one_tc_max_pairwise_mi_bits',
+    'permuted_all_tc_mean_bits', 'permuted_all_tc_sd_bits',
+    'permuted_all_tc_q95_bits', 'n_permutations',
 ]
 
 CAPABILITY_COLUMNS = [
-    'group_size', 'eta', 'n', 'true_tc_bits', 'std_init_tc_bits',
-    'seeded_init_tc_bits', 'uses_ground_truth_init', 'note',
+    'group_size', 'eta', 'n', 'dim_hidden_states', 'true_tc_bits',
+    'analytic_tc_bits', 'std_init_tc_bits', 'seeded_init_tc_bits',
+    'uses_ground_truth_init', 'note',
 ]
+
+
+def binary_flip_entropy_bits(eta):
+    """Entropy of a Bernoulli(eta) variable, in bits (0 at the edges)."""
+    eta = float(eta)
+    if eta <= 0.0 or eta >= 1.0:
+        return 0.0
+    return float(-(eta * np.log2(eta) + (1.0 - eta) * np.log2(1.0 - eta)))
 
 
 def total_correlation_bits(disc):
@@ -108,16 +134,36 @@ def structure_diagnostics(generator, group_size, noise, n, seed):
         for i in range(group_size) for j in range(i + 1, group_size)
     )
     group_tc = total_correlation_bits(disc)
+    analytic_tc = (
+        1.0 - binary_flip_entropy_bits(noise) if generator == 'parity'
+        else float('nan'))
 
-    # permuted: break all higher-order structure while preserving marginals
+    # permutation nulls over PERMUTATION_NULL_REPEATS draws: (a) one member
+    # permuted independently (destroys the joint structure while preserving
+    # marginals — the null for parity and sine-sum); (b) every column
+    # permuted independently (destroys ALL dependence — the null for
+    # product, whose remaining generators keep pairwise structure alive
+    # under (a)). The distributions characterize the finite-sample plug-in
+    # bias instead of asserting a single permuted draw is exactly zero.
     rng_perm = np.random.default_rng(seed + 1)
-    permuted = disc.copy()
-    permuted[:, 0] = rng_perm.permutation(permuted[:, 0])
-    permuted_tc = total_correlation_bits(permuted)
-    permuted_max_mi = max(
-        float(mutual_info_score(permuted[:, i], permuted[:, j]))
-        for i in range(group_size) for j in range(i + 1, group_size)
-    )
+    one_tc_bits = []
+    one_max_mi = []
+    all_tc_bits = []
+    for _ in range(PERMUTATION_NULL_REPEATS):
+        one_permuted = disc.copy()
+        one_permuted[:, 0] = rng_perm.permutation(one_permuted[:, 0])
+        one_tc_bits.append(total_correlation_bits(one_permuted))
+        one_max_mi.append(max(
+            float(mutual_info_score(one_permuted[:, i], one_permuted[:, j]))
+            for i in range(group_size) for j in range(i + 1, group_size)
+        ))
+        all_permuted = np.column_stack([
+            rng_perm.permutation(disc[:, variable])
+            for variable in range(group_size)
+        ])
+        all_tc_bits.append(total_correlation_bits(all_permuted))
+    one_array = np.asarray(one_tc_bits)
+    all_array = np.asarray(all_tc_bits)
 
     return {
         'generator': generator,
@@ -127,8 +173,16 @@ def structure_diagnostics(generator, group_size, noise, n, seed):
         'max_abs_pearson': max_abs_pearson,
         'max_pairwise_mi_bits': max_pairwise_mi,
         'group_tc_bits': group_tc,
-        'permuted_group_tc_bits': permuted_tc,
-        'permuted_max_pairwise_mi_bits': permuted_max_mi,
+        'analytic_tc_bits': analytic_tc,
+        'permuted_one_tc_mean_bits': float(one_array.mean()),
+        'permuted_one_tc_sd_bits': float(one_array.std()),
+        'permuted_one_tc_q95_bits': float(np.quantile(one_array, 0.95)),
+        'permuted_one_tc_max_pairwise_mi_bits': float(
+            np.mean(one_max_mi)),
+        'permuted_all_tc_mean_bits': float(all_array.mean()),
+        'permuted_all_tc_sd_bits': float(all_array.std()),
+        'permuted_all_tc_q95_bits': float(np.quantile(all_array, 0.95)),
+        'n_permutations': PERMUTATION_NULL_REPEATS,
     }
 
 
@@ -140,9 +194,15 @@ def _tcs_to_bits(tcs):
 def capability_diagnostic(group_size, eta, n, seed):
     """Standard-init vs atom-seeded-init Bio CorEx TC on one parity group.
 
-    Returns a row dict. The atom-seeded fit must never enter recovery
-    summaries; callers record its row with uses_ground_truth_init=True.
+    Both inits run at the SAME sufficient cardinality, 2^d states per
+    latent factor (8 for d = 3, 16 for d = 4; recorded per row), so the
+    init comparison is not confounded by capacity. 2^d is sufficient and
+    conservative — noisy parity is representable with 2^(d-1) states
+    already — and the resulting statement is scoped to this cardinality.
+    The atom-seeded fit must never enter recovery summaries; callers record
+    its row with uses_ground_truth_init=True.
     """
+    cardinality = 2 ** group_size
     rng = np.random.default_rng(seed)
     block = parity_group(rng, group_size, n, eta)
     # one latent variable, multiple EM restarts for the standard init
@@ -150,7 +210,7 @@ def capability_diagnostic(group_size, eta, n, seed):
         block, 1, 'bio', model_seed=seed,
         bio_options={
             'max_iter': BIO_MAX_ITER,
-            'dim_hidden': BIO_DIM_HIDDEN,
+            'dim_hidden': cardinality,
             'n_repeat': BIO_N_REPEAT,
         },
     )
@@ -163,7 +223,7 @@ def capability_diagnostic(group_size, eta, n, seed):
         block, 1, 'bio', model_seed=seed + 1,
         bio_options={
             'max_iter': BIO_MAX_ITER,
-            'dim_hidden': max(BIO_DIM_HIDDEN, 2 ** group_size),
+            'dim_hidden': cardinality,
             'n_repeat': 1,
             'atom_keys': atom_keys,
         },
@@ -172,21 +232,25 @@ def capability_diagnostic(group_size, eta, n, seed):
         'group_size': group_size,
         'eta': float(eta),
         'n': int(n),
-        # parity TC is exactly 1 bit for every d >= 2: the parity constraint
-        # leaves 2^(d-1) equiprobable atoms, H(X) = d-1 bits, sum H(X_i) = d
+        'dim_hidden_states': cardinality,
+        # noiseless parity TC is exactly 1 bit for every d >= 2: the parity
+        # constraint leaves 2^(d-1) equiprobable atoms, H(X) = d-1 bits,
+        # sum H(X_i) = d
         'true_tc_bits': 1.0 if eta == 0 else np.nan,
+        'analytic_tc_bits': 1.0 - binary_flip_entropy_bits(eta),
         'std_init_tc_bits': float(_tcs_to_bits(std_model.tcs)[0]),
         'seeded_init_tc_bits': float(_tcs_to_bits(seeded_model.tcs)[0]),
         'uses_ground_truth_init': True,
         'note': ('standard EM finds ~0 TC on pairwise-independent parity; '
-                 'the latent family CAN represent full parity TC when '
-                 'seeded with the joint atom (optimization failure, not '
+                 'the latent family CAN represent the parity TC when '
+                 'seeded with the joint atom, at the same 2^d-state '
+                 'cardinality for both inits (optimization failure, not '
                  'an expressiveness failure).'),
     }
 
 
 def validate_structure_diagnostics():
-    """Fast checks on the TC-in-bits and permutation logic (no model fits)."""
+    """Fast checks on the TC-in-bits and permutation-null logic (no fits)."""
 
     # pure parity of 3 bits: TC = 1 bit, all pairwise MI = 0
     rng = np.random.default_rng(0)
@@ -209,18 +273,36 @@ def validate_structure_diagnostics():
     permuted[:, 0] = rng_perm.permutation(permuted[:, 0])
     assert total_correlation_bits(permuted.astype(np.int64)) < 0.02
 
-    # continuous generator diagnostics run and return finite values
+    # flip-noise entropy: h2(0) = 0, h2(0.5) = 1 bit
+    assert binary_flip_entropy_bits(0.0) == 0.0
+    assert binary_flip_entropy_bits(0.5) == 1.0
+    assert np.isclose(binary_flip_entropy_bits(0.15), 0.6098, atol=1e-3)
+
+    # full diagnostic rows: permutation-null distributions and analytics
+    diag = structure_diagnostics('parity', 3, 0.0, 20_000, seed=11)
+    assert diag['analytic_tc_bits'] == 1.0
+    assert diag['permuted_one_tc_mean_bits'] < 0.02
+    assert diag['permuted_all_tc_mean_bits'] < 0.02
+
     diag = structure_diagnostics('sine_sum', 3, 0.20, 20_000, seed=7)
     assert np.isfinite(diag['group_tc_bits'])
-    assert diag['permuted_group_tc_bits'] < diag['group_tc_bits'] + 1e-6
+    assert diag['permuted_one_tc_mean_bits'] < (
+        diag['group_tc_bits'] + 1e-6)
+
+    # product keeps pairwise structure under a one-column permutation, so
+    # its proper null is the all-column variant
     diag = structure_diagnostics('product', 4, 0.20, 20_000, seed=8)
     assert np.isfinite(diag['max_pairwise_mi_bits'])
+    assert diag['permuted_all_tc_mean_bits'] < (
+        diag['permuted_one_tc_mean_bits'])
 
     return {
         'parity_tc_bits_checked': True,
         'pairwise_independence_checked': True,
         'permutation_destroys_parity_checked': True,
-        'continuous_diagnostics_checked': True,
+        'flip_entropy_checked': True,
+        'permutation_null_distributions_checked': True,
+        'all_column_nulled_for_product_checked': True,
     }
 
 
@@ -248,8 +330,10 @@ def run_all_diagnostics(output_dir, n=DIAGNOSTIC_N, capability=True):
         structure_rows.append(row)
         print(
             f"diagnostic {generator} d={group_size} noise={noise}: "
-            f"TC={row['group_tc_bits']:.3f} bits, "
-            f"permuted TC={row['permuted_group_tc_bits']:.4f} bits, "
+            f"TC={row['group_tc_bits']:.3f} bits "
+            f"(analytic {row['analytic_tc_bits']:.3f}), "
+            f"one-permuted TC={row['permuted_one_tc_mean_bits']:.4f} bits, "
+            f"all-permuted TC={row['permuted_all_tc_mean_bits']:.4f} bits, "
             f"max pairwise MI={row['max_pairwise_mi_bits']:.4f} bits"
         )
     structure_path = output_dir / 'structure_diagnostics.csv'
@@ -266,10 +350,12 @@ def run_all_diagnostics(output_dir, n=DIAGNOSTIC_N, capability=True):
                                                  eta))
             capability_rows.append(row)
             print(
-                f"capability d={group_size} eta={eta}: "
+                f"capability d={group_size} eta={eta} "
+                f"({row['dim_hidden_states']} states): "
                 f"std-init TC={row['std_init_tc_bits']:.4f} bits, "
                 f"atom-seeded TC={row['seeded_init_tc_bits']:.4f} bits "
-                f"(true {row['true_tc_bits']})"
+                f"(true {row['true_tc_bits']}, "
+                f"analytic {row['analytic_tc_bits']:.3f})"
             )
     capability_path = output_dir / 'capability_diagnostics.csv'
     pd.DataFrame(capability_rows).to_csv(capability_path, index=False)
