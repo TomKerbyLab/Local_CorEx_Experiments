@@ -1,4 +1,18 @@
-"""Factor matching and recovery metrics for Local CorEx experiments."""
+"""Factor matching and recovery metrics for Local CorEx experiments.
+
+Matching objective: Hungarian assignment on maximum COSINE similarity
+(the decided primary rule, harmonized with the nonlinear experiments);
+AUPRC stays computed and reported at the matched pairs as the
+experiment-specific ranking metric. Degenerate factors (total nonnegative
+score <= DEGENERATE_MI_SUM) score an empty top-k support: top-k
+precision/recall/F1-like metrics 0, leakage fractions 0, cosine 0, raw
+AUPRC left at the group prevalence, adjusted AUPRC 0. They enter the
+primary support-recovery averages as zeros; conditional-on-valid averages
+are reported alongside (num_top_k_valid / matched_top_k_f1_valid).
+Remaining score ties are broken by neutral tie handling (a seeded column
+permutation) instead of the stable sort's lower-index rule, which would
+award an all-zero factor a perfect top-k result on the first true group.
+"""
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -6,12 +20,18 @@ from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cosine
 from sklearn.metrics import average_precision_score
 
+DEGENERATE_MI_SUM = 1e-12
+DEFAULT_TIE_SEED = 0  # fixed neutral tie order: reproducible, layout-free
+
 RECOVERY_COLUMNS = [
     'matched_average_precision',
     'matched_adjusted_average_precision',
     'matched_cosine_distance',
     'matched_cosine_similarity',
     'matched_top_k_f1',
+    'matched_top_k_f1_valid',
+    'num_top_k_valid',
+    'matched_top_k_degenerate_fraction',
     'matched_nuisance_score_fraction',
     'matched_top_k_nuisance_fraction',
     'matched_routing_score_fraction',
@@ -52,6 +72,34 @@ def safe_cosine_distance(first, second):
     if np.linalg.norm(first) == 0 or np.linalg.norm(second) == 0:
         return 1.0
     return float(cosine(first, second))
+
+
+def _descending_order(scores, tie_seed=DEFAULT_TIE_SEED):
+    """Indexes by descending score with neutral tie handling.
+
+    Score ties are broken by a seeded permutation of the columns before
+    the stable descending sort, so the tie order has no relation to the
+    variable layout (the lower-index stable tie-break instead hands an
+    all-tied — e.g. all-zero — factor the leading true group as its top-k
+    set). ``tie_seed=None`` keeps the lower-index stable rule.
+    """
+    scores = np.asarray(scores, dtype=float)
+    if tie_seed is None:
+        return np.argsort(-scores, kind='stable')
+    rng = np.random.default_rng(tie_seed)
+    column_order = rng.permutation(len(scores))
+    ordered_positions = np.argsort(
+        -scores[column_order], kind='stable')
+    return column_order[ordered_positions]
+
+
+def _pair_tie_seed(tie_seed, group_index, factor_index):
+    """Deterministic per-assignment tie seed (varies across pairs)."""
+    if tie_seed is None:
+        return None
+    return int(np.random.default_rng(
+        (int(tie_seed), int(group_index), int(factor_index))
+    ).integers(0, 2**31 - 1))
 
 
 def create_factor_score_matrices(groups, factor_scores):
@@ -99,8 +147,15 @@ def _validate_role_mask(mask, n_variables, name):
 
 def matched_support_diagnostics(groups, factor_scores,
                                 group_indexes, factor_indexes,
-                                nuisance_mask=None, routing_mask=None):
-    """Measure support recovery and role-specific leakage for matched pairs."""
+                                nuisance_mask=None, routing_mask=None,
+                                tie_seed=DEFAULT_TIE_SEED):
+    """Measure support recovery and role-specific leakage for matched pairs.
+
+    A factor whose total nonnegative score is at most DEGENERATE_MI_SUM is
+    degenerate: its predicted top-k support is EMPTY and every top-k and
+    leakage quantity is 0 (cosine is 0 upstream, raw AUPRC stays at the
+    group prevalence). Non-degenerate top-k sets use the neutral tie order.
+    """
     groups = np.asarray(groups, dtype=float)
     factor_scores = np.asarray(factor_scores, dtype=float)
     if groups.ndim != 2 or factor_scores.ndim != 2:
@@ -125,6 +180,7 @@ def matched_support_diagnostics(groups, factor_scores,
     nuisance_mask = nuisance_mask & ~routing_mask
 
     top_k_f1 = []
+    top_k_degenerate = []
     nuisance_score_fraction = []
     top_k_nuisance_fraction = []
     routing_score_fraction = []
@@ -134,7 +190,22 @@ def matched_support_diagnostics(groups, factor_scores,
         group = groups[group_index]
         factor = factor_scores[factor_index]
         group_size = int(np.sum(group > 0))
-        top_indexes = np.argsort(-factor, kind='stable')[:group_size]
+        nonnegative_scores = np.maximum(factor, 0.0)
+        total_score = float(nonnegative_scores.sum())
+        if total_score <= DEGENERATE_MI_SUM:
+            # empty predicted support: zeros for every top-k quantity
+            top_k_degenerate.append(True)
+            top_k_f1.append(0.0)
+            top_k_nuisance_fraction.append(0.0)
+            top_k_routing_fraction.append(0.0)
+            nuisance_score_fraction.append(0.0)
+            routing_score_fraction.append(0.0)
+            continue
+        top_k_degenerate.append(False)
+        top_indexes = _descending_order(
+            factor,
+            _pair_tie_seed(tie_seed, group_index, factor_index),
+        )[:group_size]
         recovered_count = np.sum(group[top_indexes] > 0)
 
         # Both the true and estimated supports contain k variables, so
@@ -147,8 +218,6 @@ def matched_support_diagnostics(groups, factor_scores,
             np.mean(routing_mask[top_indexes])
         ))
 
-        nonnegative_scores = np.maximum(factor, 0.0)
-        total_score = np.sum(nonnegative_scores)
         if total_score == 0:
             nuisance_score_fraction.append(0.0)
             routing_score_fraction.append(0.0)
@@ -162,6 +231,7 @@ def matched_support_diagnostics(groups, factor_scores,
 
     return {
         'top_k_f1': np.asarray(top_k_f1),
+        'top_k_degenerate': np.asarray(top_k_degenerate),
         'nuisance_score_fraction': np.asarray(nuisance_score_fraction),
         'top_k_nuisance_fraction': np.asarray(top_k_nuisance_fraction),
         'routing_score_fraction': np.asarray(routing_score_fraction),
@@ -177,19 +247,27 @@ def harmonic_mean(first, second):
 
 
 def match_factors_to_groups(groups, factor_scores, nuisance_mask=None,
-                            routing_mask=None):
-    """Match factors to groups once using maximum average precision.
+                            routing_mask=None, tie_seed=DEFAULT_TIE_SEED):
+    """Match factors to groups once on maximum cosine similarity.
 
-    The assignment is reused for every other metric. Recovery divides the
-    matched total by the number of true groups, which penalizes missing groups.
-    Precision divides by the number of learned factors, which penalizes extra
-    factors. Their harmonic mean gives a balanced summary.
+    The Hungarian assignment maximizes cosine similarity — the decided
+    primary objective, harmonized with the nonlinear experiments; AUPRC
+    remains computed and reported at the matched pairs but never drives
+    the assignment. The assignment is reused for every other metric.
+    Recovery divides the matched total by the number of true groups, which
+    penalizes missing groups. Precision divides by the number of learned
+    factors, which penalizes extra factors. Their harmonic mean gives a
+    balanced summary. Degenerate factors (total nonnegative score at most
+    DEGENERATE_MI_SUM) score empty top-k supports (zeros in the primary
+    averages; conditional-on-valid averages reported alongside).
     """
     (average_precision,
      adjusted_average_precision,
      cosine_distance) = create_factor_score_matrices(groups, factor_scores)
 
-    group_indexes, factor_indexes = linear_sum_assignment(-average_precision)
+    # cosine is the primary objective: minimize total cosine distance
+    # (equivalently maximize total similarity) under a one-to-one pairing
+    group_indexes, factor_indexes = linear_sum_assignment(cosine_distance)
     matched_average_precision = average_precision[group_indexes, factor_indexes]
     matched_adjusted_average_precision = adjusted_average_precision[
         group_indexes,
@@ -204,6 +282,7 @@ def match_factors_to_groups(groups, factor_scores, nuisance_mask=None,
         factor_indexes,
         nuisance_mask=nuisance_mask,
         routing_mask=routing_mask,
+        tie_seed=tie_seed,
     )
 
     num_true_groups = len(groups)
@@ -227,13 +306,14 @@ def match_factors_to_groups(groups, factor_scores, nuisance_mask=None,
             'adjusted_average_precision': float(adjusted_ap_score),
             'cosine_distance': float(cosine_score),
             'top_k_f1': float(top_k_f1),
+            'top_k_degenerate': bool(top_k_degenerate),
             'nuisance_score_fraction': float(nuisance_fraction),
             'top_k_nuisance_fraction': float(top_k_nuisance),
             'routing_score_fraction': float(routing_fraction),
             'top_k_routing_fraction': float(top_k_routing),
         }
         for (group_index, factor_index, ap_score, adjusted_ap_score,
-             cosine_score, top_k_f1, nuisance_fraction,
+             cosine_score, top_k_f1, top_k_degenerate, nuisance_fraction,
              top_k_nuisance, routing_fraction, top_k_routing) in zip(
             group_indexes,
             factor_indexes,
@@ -241,6 +321,7 @@ def match_factors_to_groups(groups, factor_scores, nuisance_mask=None,
             matched_adjusted_average_precision,
             matched_cosine_distance,
             support_diagnostics['top_k_f1'],
+            support_diagnostics['top_k_degenerate'],
             support_diagnostics['nuisance_score_fraction'],
             support_diagnostics['top_k_nuisance_fraction'],
             support_diagnostics['routing_score_fraction'],
@@ -260,6 +341,16 @@ def match_factors_to_groups(groups, factor_scores, nuisance_mask=None,
         'matched_cosine_distance': float(np.mean(matched_cosine_distance)),
         'matched_cosine_similarity': float(np.mean(matched_cosine_similarity)),
         'matched_top_k_f1': float(np.mean(support_diagnostics['top_k_f1'])),
+        'matched_top_k_f1_valid': (
+            float(np.mean(support_diagnostics['top_k_f1'][
+                ~support_diagnostics['top_k_degenerate']
+            ]))
+            if not support_diagnostics['top_k_degenerate'].all()
+            else float('nan')),
+        'num_top_k_valid': int(
+            (~support_diagnostics['top_k_degenerate']).sum()),
+        'matched_top_k_degenerate_fraction': float(np.mean(
+            support_diagnostics['top_k_degenerate'])),
         'matched_nuisance_score_fraction': float(np.mean(
             support_diagnostics['nuisance_score_fraction']
         )),
@@ -363,6 +454,9 @@ def factor_recovery_output_values(recovery):
         recovery['matched_cosine_distance'],
         recovery['matched_cosine_similarity'],
         recovery['matched_top_k_f1'],
+        recovery['matched_top_k_f1_valid'],
+        recovery['num_top_k_valid'],
+        recovery['matched_top_k_degenerate_fraction'],
         recovery['matched_nuisance_score_fraction'],
         recovery['matched_top_k_nuisance_fraction'],
         recovery['matched_routing_score_fraction'],
@@ -441,6 +535,62 @@ def validate_factor_matching():
     assert duplicated['balanced_average_precision'] < 1.0
     assert duplicated['true_group_recovery_average_precision'] < 1.0
 
+    # the assignment objective is cosine similarity, not AUPRC: in this
+    # two-group example the objectives pick DIFFERENT pairings (margins
+    # are strict on both sides) and the code must follow cosine
+    conflict_groups = np.zeros((2, 5))
+    conflict_groups[0, :3] = 1.0
+    conflict_groups[1, 3:] = 1.0
+    conflict_factor_a = np.array([1.06, 0.69, 4.92, 0.01, 1.83])
+    conflict_factor_b = np.array([0.29, 3.2, 0.23, 0.34, 0.4])
+    conflict = match_factors_to_groups(
+        conflict_groups, np.vstack([conflict_factor_a, conflict_factor_b]))
+    conflict_pairs = sorted(
+        (item['true_group'], item['learned_factor'])
+        for item in conflict['assignments']
+    )
+    assert conflict_pairs == [(0, 1), (1, 0)], conflict_pairs
+    ap_optimum = linear_sum_assignment(-np.array([
+        [0.8056, 0.7], [0.45, 0.5833]]))[1]
+    assert not np.array_equal(ap_optimum, [1, 0])  # AP would pair (0,0),(1,1)
+
+    # degenerate Gaussian factor: empty top-k support and the decided
+    # per-quantity semantics (raw AUPRC = prevalence, cosine = 0)
+    degenerate_scores = np.zeros((1, 25))
+    degenerate = match_factors_to_groups(groups, degenerate_scores)
+    degenerate_assignment = degenerate['assignments'][0]
+    assert degenerate_assignment['top_k_degenerate'] is True
+    assert degenerate_assignment['top_k_f1'] == 0.0
+    assert np.isclose(degenerate['matched_cosine_similarity'], 0.0)
+    assert np.isclose(degenerate_assignment['average_precision'], 5 / 25)
+    assert np.isclose(
+        degenerate_assignment['adjusted_average_precision'], 0.0)
+    assert degenerate['matched_top_k_f1'] == 0.0
+    assert np.isnan(degenerate['matched_top_k_f1_valid'])
+    assert degenerate['num_top_k_valid'] == 0
+
+    # neutral tie handling: with ALL scores tied, the legacy lower-index
+    # rule hands every factor the leading group (matched top-k), while the
+    # seeded neutral rule spreads the assignments; both orders reproduce
+    tied_scores = np.ones((5, 25))  # all-tied: every ordering is a tie case
+    legacy_tied = match_factors_to_groups(groups, tied_scores, tie_seed=None)
+    assert legacy_tied['matched_top_k_f1'] == 0.2  # all matched to group 0
+    neutral_tied = match_factors_to_groups(groups, tied_scores)
+    assert all(assignment['top_k_f1'] < 1.0
+               for assignment in neutral_tied['assignments'])
+    repeat_tied = match_factors_to_groups(groups, tied_scores)
+    assert repeat_tied['matched_top_k_f1'] == neutral_tied['matched_top_k_f1']
+
+    # mixed valid + degenerate: the zero enters the primary average, the
+    # conditional-on-valid average excludes it
+    mixed_scores = groups.copy()
+    mixed_scores[1] = 0.0
+    mixed = match_factors_to_groups(groups, mixed_scores)
+    assert np.isclose(mixed['matched_top_k_f1'], 4 / 5)
+    assert np.isclose(mixed['matched_top_k_f1_valid'], 1.0)
+    assert mixed['num_top_k_valid'] == 4
+    assert np.isclose(mixed['matched_top_k_degenerate_fraction'], 0.2)
+
     extended_groups = np.pad(groups, ((0, 0), (0, 25)))
     extended_perfect = match_factors_to_groups(
         extended_groups,
@@ -481,4 +631,7 @@ def validate_factor_matching():
         'adjusted_average_precision_checked': True,
         'nuisance_score_leakage_checked': True,
         'top_k_nuisance_leakage_checked': True,
+        'cosine_primary_assignment_checked': True,
+        'degenerate_semantics_checked': True,
+        'neutral_tie_handling_checked': True,
     }
