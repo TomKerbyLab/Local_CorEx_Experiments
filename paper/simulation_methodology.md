@@ -34,9 +34,12 @@ ground truth and clean analytic control. Experiment 2 establishes it under
 nonlinear, pairwise-independent dependence that is invisible to pairwise
 scans; within Experiment 2, the sine-sum generator is the **intended
 primary test** that localization improves nonlinear recovery — a role it
-must earn from the favorable pilot (Appendix E, item 7: ordinary oracle
-fitting recovers the groups and explains meaningful dependence,
-repeatably, and beats the paired global fit), since capability shown by
+must earn from the favorable pilot (Appendix E, item 7 — run: ordinary
+oracle Bio CorEx on sine-sum recovers the groups
+(top-d F1 0.62/0.73 across the two regions, matched cosine 0.64/0.68),
+explains meaningful dependence (factor TC ≈ 0.086 nats where Linear CorEx
+explains ≈ 0.001), and beats both the paired global fit (top-d F1
+0.47/0.35) and Linear CorEx, repeatably), since capability shown by
 informed initialization does not substitute for successful ordinary
 fitting. Parity — the most demanding case — serves
 as a stress test characterizing the
@@ -603,10 +606,12 @@ Bio vs Linear by noise under oracle fits; the structure-diagnostics panel).
 
 The reviewer-ordered backlog from the previous revision. Items 1–6 are
 now **implemented** (commit references in the status column), and each
-"(code pending)" flag has been lifted from the body text; item 7 — the
-favorable pilot — is the remaining step before any full nonlinear batch,
-and item 8 was **not adopted** (the fixed init seed is retained by
-default, as documented in §3.3).
+"(code pending)" flag has been lifted from the body text. Item 7 — the
+favorable pilot — **ran** (commit `09eb784`): sine-sum stays the intended
+primary demonstration; on parity, ordinary fitting stays hard at the
+most favorable settings, and the capability diagnostic characterizes the
+optimization failure. Item 8 was **not adopted** (the fixed init seed is
+retained by default, as documented in §3.3).
 
 | # | Item | Where the decision is recorded | Status |
 |---|---|---|---|
@@ -616,5 +621,5 @@ default, as documented in §3.3).
 | 4 | Matching-objective harmonization | §3.4, §4.7, Appendix B | **Implemented** (Gaussian `605c2ae`): Gaussian Hungarian matching maximizes cosine as primary; AUPRC remains computed/reported; harmonized degenerate semantics and neutral ties |
 | 5 | Cluster-selection rule | §4.4 | **Implemented** (`c6d456a`): Hungarian one-to-one alignment is the primary estimated-cluster rule; max-overlap retained as the labeled diagnostic fields `max_overlap_same_cluster` / `max_overlap_matches_hungarian` |
 | 6 | Global-capacity controls | §1 | **Implemented** (`5e653b0`): Gaussian global M = 10 vs 5 vs pooled oracle locals; nonlinear global M = 8 vs 4 vs 2 × 4. Capacity comparison is apples-to-apples: **both** global budgets are scored against the same concatenated set of region-specific supports with the same matching rule, and the corresponding local aggregate (both regions' local fits pooled) is defined explicitly. The existing per-region recovery remains the primary workflow comparison |
-| 7 | Favorable pilot before full nonlinear grids | §1, §4.8 | **Pending** — next step. Large n, low noise, oracle partition, no_routing, no nuisance; standard vs seeded init; support recovery and explained TC read together. Establishes where localization demonstrably helps vs. characterizes a limitation |
+| 7 | Favorable pilot before full nonlinear grids | §1, §4.8 | **Ran** (`09eb784`, 2026-10-27): large n (5000/region), lowest nonzero noise, oracle + global, no_routing, no nuisance, two replicates; standard-init pipeline fits vs the parity capability diagnostic (standard vs atom-seeded, 2^d states) at the same n. Result: sine-sum shows the intended effect (oracle Bio top-d F1 0.62/0.73 beats its global fit 0.47/0.35 and Linear 0.49/0.48, factor TC ≈ 0.086 nats vs ≈ 0.001); parity stays hard for standard init (oracle top-d F1 ≈ 0.5, TC ≈ 0) while the capability diagnostic shows ~0 vs 1.0/0.714 bits at matched 2^d capacity — optimization failure, not expressiveness |
 | 8 | Optional: Gaussian fit seeds | §3.3 | **Not adopted** — the fixed init seed 42 is retained by default (the derived-seed option would change results) |
