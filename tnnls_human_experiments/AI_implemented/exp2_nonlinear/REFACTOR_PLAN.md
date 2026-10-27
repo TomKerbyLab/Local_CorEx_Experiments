@@ -64,7 +64,7 @@ currently exist. Consolidation:
 - New 20-line `seeds.py`: `derived_seed` (sha256 of serialized parts,
   docstring citing spec 00). `runner` and `structure_diagnostics` import
   it (two copies exist today). Do NOT touch
-  `../synthetic/experiment_common.deterministic_seed` — changing it would
+  `../gaussian/experiment_common.deterministic_seed` — changing it would
   alter Gaussian-experiment seed values.
 
 ## Step 3 — extract `config.py`, then kill the string-suffix encoding
@@ -178,5 +178,5 @@ output must render identically.
 ## Out of scope (unchanged)
 
 - Any behavior: seeds, grids, CSVs, metrics, figure content, Bio options.
-- `tnnls_experiments/` (cross-check reference) and `../synthetic/`.
+- `tnnls_experiments/` (cross-check reference) and `../gaussian/`.
 - Moving the code out of `AI_implemented/` (separate future step).

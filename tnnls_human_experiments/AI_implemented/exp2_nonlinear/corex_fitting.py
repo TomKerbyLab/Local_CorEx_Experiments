@@ -1,6 +1,6 @@
 """Construction and fitting of Local CorEx estimators.
 
-Adapted from ../../synthetic/corex_fitting.py with two experiment-2
+Adapted from ../../gaussian/corex_fitting.py with two experiment-2
 hardening changes:
 
 - Every construction receives an explicit integer seed and every Bio CorEx

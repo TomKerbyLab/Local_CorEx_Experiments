@@ -31,9 +31,9 @@ from config import CAPACITY_CONFIG, CORE_LEVELS, DEFAULTS, ROOT_SEED_BASE
 from corex_fitting import factor_variable_scores
 from seeds import derived_seed
 
-# result_io lives in ../../synthetic (append keeps sibling modules from
+# result_io lives in ../../gaussian (append keeps sibling modules from
 # shadowing this directory's modules)
-sys.path.append(str(Path(__file__).resolve().parents[2] / 'synthetic'))
+sys.path.append(str(Path(__file__).resolve().parents[2] / 'gaussian'))
 from result_io import append_run_log, combine_csv_files, write_csv_atomically  # noqa: E402
 
 from run_nonlinear_experiments import (  # noqa: E402

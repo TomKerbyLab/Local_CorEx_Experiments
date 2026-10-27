@@ -29,7 +29,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-sys.path.append(str(Path(__file__).resolve().parents[2] / 'synthetic'))
+sys.path.append(str(Path(__file__).resolve().parents[2] / 'gaussian'))
 from result_io import combine_csv_files  # noqa: E402
 from config import GENERATOR_NOISE_NAMES as GENERATOR_NOISE_NAME  # noqa: E402
 

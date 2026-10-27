@@ -1,6 +1,6 @@
 """Partition methods for the nonlinear experiments.
 
-Adapted from ../../synthetic/partitioning.py. Methods:
+Adapted from ../../gaussian/partitioning.py. Methods:
 
 - ``oracle``: the true region labels.
 - ``phate``: PHATE embedding (10 dimensions by default) followed by k-means

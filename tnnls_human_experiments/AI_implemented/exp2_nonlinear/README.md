@@ -3,7 +3,7 @@
 AI-implemented, human-style build of experiment 2
 (`agent_instructions/02_nonlinear_higher_order_recovery.md`). This is a
 *transitional* copy: it follows the monolithic flat-script style of
-`../../synthetic/`, lives here until it has been reviewed and understood,
+`../../gaussian/`, lives here until it has been reviewed and understood,
 and can then move to the normal human experiments location.
 
 ## Layout

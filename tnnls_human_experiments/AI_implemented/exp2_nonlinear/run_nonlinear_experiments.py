@@ -1,6 +1,6 @@
 """Run the nonlinear higher-order Local CorEx experiments (spec 02).
 
-Structure mirrors ../synthetic/run_gaussian_experiments.py: every condition
+Structure mirrors ../gaussian/run_gaussian_experiments.py: every condition
 (one replicate of one data-generating configuration) is written to its own
 pair of CSV files and completed conditions are skipped by default, so
 interrupted runs are restartable. Both files of a condition are built from a
@@ -46,9 +46,9 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import linear_sum_assignment
 
-# result_io lives in ../synthetic; APPEND (not insert) so the sibling
+# result_io lives in ../gaussian; APPEND (not insert) so the sibling
 # modules there can never shadow this directory's same-named modules
-sys.path.append(str(Path(__file__).resolve().parents[2] / 'synthetic'))
+sys.path.append(str(Path(__file__).resolve().parents[2] / 'gaussian'))
 from result_io import (  # noqa: E402
     append_run_log,
     combine_csv_files,
