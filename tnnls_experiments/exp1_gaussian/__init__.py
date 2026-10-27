@@ -1,1 +1,0 @@
-"""Experiment 1: Gaussian grouped-covariance recovery."""
