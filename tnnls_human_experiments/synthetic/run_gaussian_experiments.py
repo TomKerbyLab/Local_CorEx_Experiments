@@ -126,6 +126,7 @@ def run_experiment(experiment, output_dir, repetitions=None,
     })
     conditions_written = 0
     conditions_skipped = 0
+    failed_conditions = []
     status = 'completed'
     try:
         for setup in config['setups']:
@@ -151,21 +152,35 @@ def run_experiment(experiment, output_dir, repetitions=None,
                             f"n={sample_size}, nuisance={nuisance_dimensions}, "
                             f"rep={rep}"
                         )
-                        results = lc_simulation.run_simulation(
-                            rep=rep,
-                            cluster_size=sample_size,
-                            alphas=config['alphas'],
-                            num_factors=config['num_factors'],
-                            estimators=config['estimators'],
-                            partition_methods=config['partition_methods'],
-                            same_dist=setup_flags['same_dist'],
-                            disjoint=setup_flags['disjoint'],
-                            nuisance_dimensions=nuisance_dimensions,
-                            progress=True,
-                        )
+                        # One failing condition must not abort the whole
+                        # experiment: the rest of the grid still fits, and the
+                        # failed condition is retried on the next invocation.
+                        try:
+                            results = lc_simulation.run_simulation(
+                                rep=rep,
+                                cluster_size=sample_size,
+                                alphas=config['alphas'],
+                                num_factors=config['num_factors'],
+                                estimators=config['estimators'],
+                                partition_methods=config['partition_methods'],
+                                same_dist=setup_flags['same_dist'],
+                                disjoint=setup_flags['disjoint'],
+                                nuisance_dimensions=nuisance_dimensions,
+                                progress=True,
+                            )
+                        except Exception as exc:
+                            print(f"FAILED condition {output_path}: "
+                                  f"{type(exc).__name__}: {exc}")
+                            failed_conditions.append(output_path)
+                            continue
                         results.insert(0, 'experiment', experiment)
                         write_csv_atomically(results, output_path)
                         conditions_written += 1
+
+        # run_end (logged in finally) should distinguish a fully clean run
+        # from one that finished with failed conditions.
+        if failed_conditions:
+            status = 'completed_with_failures'
 
         combined_path = combine_results(output_dir, experiment)
     except BaseException:
@@ -179,6 +194,18 @@ def run_experiment(experiment, output_dir, repetitions=None,
             'conditions_written': conditions_written,
             'conditions_skipped': conditions_skipped,
             'elapsed_s': round(time() - start_time, 3),
+        })
+
+    if failed_conditions:
+        status = 'completed_with_failures'
+        print(f"{len(failed_conditions)} condition(s) failed:")
+        for path in failed_conditions:
+            print(f"  {path}")
+        append_run_log(output_dir, {
+            'event': 'condition_failures',
+            'experiment': experiment,
+            'n_failed': len(failed_conditions),
+            'conditions': [str(path) for path in failed_conditions],
         })
 
     if combined_path is not None:
