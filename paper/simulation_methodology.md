@@ -32,9 +32,14 @@ The synthetic experiments support the paper's first claim:
 Experiment 1 establishes the claim with linear (covariance-structured)
 ground truth and clean analytic control. Experiment 2 establishes it under
 nonlinear, pairwise-independent dependence that is invisible to pairwise
-scans; within Experiment 2, the sine-sum generator is the *primary*
-demonstration that localization improves nonlinear recovery, while parity
-— the most demanding case — serves as a stress test characterizing the
+scans; within Experiment 2, the sine-sum generator is the **intended
+primary test** that localization improves nonlinear recovery — a role it
+must earn from the favorable pilot (Appendix E, item 7: ordinary oracle
+fitting recovers the groups and explains meaningful dependence,
+repeatably, and beats the paired global fit), since capability shown by
+informed initialization does not substitute for successful ordinary
+fitting. Parity — the most demanding case — serves
+as a stress test characterizing the
 limits of generic CorEx EM. Two diagnostics characterize what CorEx can
 represent versus what generic EM optimization finds. In both experiments, the
 comparison set is: a **global** baseline (one fit on the pooled data) versus
@@ -145,10 +150,12 @@ Every Gaussian fit uses a **single fixed init seed (42)** — a deliberate,
 documented exception to the derived-seed convention (§2): the init is not
 condition-derived, so the same init basis is reused across conditions
 (switching to derived per-fit seeds is a flagged follow-up item,
-Appendix E). In the dedicated `bio_check` configuration
-the **Bio CorEx** estimator (discrete marginals, `dim_hidden = 2`,
-`smooth_marginals = False`) replaces it to demonstrate estimator-agnostic
-behavior. Every fit is scored against the region's true factor supports.
+Appendix E). In the dedicated `bio_check` configuration the **Bio CorEx** estimator
+(`dim_hidden = 2`, `smooth_marginals = False`, `marginal_description =
+'gaussian'`) replaces it to demonstrate estimator-agnostic behavior: the
+continuous Gaussian data are passed **as-is** — no standardization, no
+discretization — with Gaussian marginals handled natively by the
+estimator. Every fit is scored against the region's true factor supports.
 
 ### 3.4 Recovery assessment
 
@@ -183,9 +190,16 @@ vectors. Scoring proceeds in three steps:
      metrics can reach;
    - *degenerate handling* (decided; code pending, Appendix E): factors
      with effectively zero total score (≤ 10⁻¹² for the cumulative-support
-     rule, and otherwise all-zero score columns) receive an **empty
-     predicted support and zero recovery**, their frequency is reported,
-     and averages are additionally shown conditional on valid factors.
+     rule, and otherwise all-zero score columns) have, explicitly: an
+     **empty predicted support**; support precision / recall / F1 /
+     Jaccard of **0**; cosine similarity **0**; raw average precision left
+     at its natural value (**the group prevalence** — an uninformative
+     ranking is uninformative, not wrong); and **0 for
+     prevalence-adjusted AUPRC**. "Zero recovery" therefore refers to
+     support recovery, cosine, and adjusted AUPRC — raw AUPRC is never
+     silently overridden. Degenerate factors **enter the primary
+     support-recovery averages as zeros**; averages conditional on valid
+     factors are reported separately, with the degenerate frequency.
      Remaining score ties must not be resolved in favor of the
      signal-column layout: the stable descending sort's lower-index
      tie-break can otherwise award an all-zero factor a perfect top-d
@@ -307,10 +321,13 @@ CorEx, `dim_hidden` counts each categorical factor's discrete states) —
 `max_iter = 200`, and `n_repeat = 5` EM restarts keeping the
 maximum-TC solution. Four states cover the noiseless 3-variable parity
 groups completely (2^(d−1) = 4 joint patterns) but cannot fully explain
-the 4-variable groups (2^(d−1) = 8 patterns; with flip noise η > 0 all
-2^d joint patterns receive positive probability), so reported parity
-recovery for the 4-variable groups is a partial-recovery measurement at
-this cardinality. Linear CorEx
+the 4-variable groups (2^(d−1) = 8 patterns). The two consequences must be
+kept distinct: such a factor may still *identify* the participating
+variables correctly — **support recovery remains meaningful** — while its
+**explained TC** for those groups is necessarily incomplete, so
+explained-TC claims for the 4-variable groups are scoped to this
+cardinality, and support recovery is not inherently "partial".
+Linear CorEx
 with `max_iter = 2000` and `gaussianize='outliers'`. Two hardening rules are
 worth recording: every fit receives an explicit integer seed derived from
 the condition and cell (`hash(root_seed, 'corex', draw, method, cell,
@@ -342,12 +359,12 @@ similarity**, then held fixed for all other metrics. Per matched pair:
   and taking the smallest prefix reaching 80% of the factor's total MI,
   reported with size, density, and F1 against the true group, plus the role
   fractions *within* the support. Factors whose total MI ≤ 10⁻¹² are
-  `support_degenerate`, flagged, and excluded from support metrics. The
-  decided degenerate/zero-score semantics (§3.4; code pending) apply here
-  as well; under the current implementation an all-zero factor inherits
-  the first group's columns as its top-d set via the stable sort's
-  lower-index tie-break, which is precisely the artifact this decision
-  removes.
+  `support_degenerate`, flagged — and scored, not excluded: the decided
+  semantics (§3.4; code pending) give them an empty support with zeros
+  entering the primary support-recovery average. Under the current
+  implementation an all-zero factor inherits the first group's columns as
+  its top-d set via the stable sort's lower-index tie-break, which is
+  precisely the artifact this decision removes.
 
 Aggregation is within each replicate fit (a random-partition draw is never
 averaged into another draw; collapsing over draws is left to downstream
@@ -389,11 +406,18 @@ Two diagnostics, run on **100,000 freshly generated observations** per cell
    higher-order structure is an **optimization failure, not an
    expressiveness failure** — requires the two inits to be matched in
    *capacity* as well as in family. The decided design (code pending):
-   both inits use a **fixed sufficient cardinality of 2^d states** (8 for
-   d = 3, 16 for d = 4, covering the noisy-parity pattern set), recorded
-   per row, instead of the current asymmetry (standard 4 states vs seeded
+   both inits use a **fixed cardinality of 2^d states** (8 for d = 3, 16
+   for d = 4) — sufficient and conservative, though not minimal: with
+   flip noise, the 2^(d−1)-state latent Z = (B₁, …, B_{d−1}) already
+   renders the group conditionally independent — recorded per row,
+   instead of the current asymmetry (standard 4 states vs seeded
    max(4, 2^d) = 8/16); higher cardinality remains a targeted sensitivity
-   check only.
+   check only. The optimization-only conclusion is correspondingly
+   **scoped to what is tested**: at the sufficient cardinality of the
+   capability diagnostic, informed initialization reaches substantially
+   higher explained TC than ordinary initialization. The main recovery
+   experiment still fits four states, so its failures are not thereby
+   established to be purely optimization failures.
 
 All model-reported TCs are converted nats → bits before comparison.
 
@@ -474,11 +498,14 @@ groups, held fixed for every other metric. The standardized **primary
 objective in both experiments is maximum cosine similarity**; AUPRC is
 additionally computed and reported as Experiment 1's ranking metric
 (§3.4; the Gaussian implementation's switch to cosine is pending code —
-Appendix E). Decided degenerate handling (code pending): zero-score /
-degenerate factors receive an empty predicted support and zero recovery
-scores, their frequency is reported, and averages are also shown
-conditional on valid factors; score ties are never resolved in favor of
-the signal-column layout.
+Appendix E). Decided degenerate handling (code pending), explicit per
+quantity for an all-zero factor: predicted support **empty**; support
+precision / recall / F1 / Jaccard **0**; cosine similarity **0**; raw
+average precision **unchanged (= the group prevalence)**;
+prevalence-adjusted AUPRC **0**. Such factors enter the primary
+support-recovery averages **as zeros**; averages conditional on valid
+factors are reported separately with the degenerate frequency. Score ties
+are never resolved in favor of the signal-column layout (§3.4).
 
 **Per-matched-pair metrics.**
 
@@ -488,7 +515,9 @@ the signal-column layout.
   factor-score row (zero vectors handled as worst-case).
 - top-d precision / recall / F1 / Jaccard, where the predicted support is
   the d highest-scoring variables of the matched factor, d = group size
-  (stable descending sort, ties by lower index).
+  (currently a stable descending sort with ties by lower index; the
+  decided rule replaces this with neutral tie handling — see the
+  degenerate handling above, and §3.4).
 - Role false positives (nuisance or routing):
   - *score-mass share*: Σ a_{ji} over role columns / Σ a_{ji} overall
     (nonnegative scores);
@@ -496,8 +525,13 @@ the signal-column layout.
   - *support occupancy*: the same within the cumulative-MI support.
 - 80% cumulative-MI support: with s_{(1)} ≥ ⋯ ≥ s_{(p)} the sorted scores
   and T = Σᵢ max(s_{(i)},0), the smallest prefix with
-  Σᵢ≤m s_{(i)} / T ≥ 0.8; degenerate factors (T ≤ 1e-12) are flagged and
+  Σᵢ≤m s_{(i)} / T ≥ 0.8; degenerate factors (T ≤ 1e-12) are flagged and,
+  per the decided degenerate handling, score zeros rather than being
   excluded.
+- top-d prediction stability: the top-d set currently comes from a stable
+  descending sort with ties broken by lower index; the decided rule
+  removes that tie-break in favor of neutral tie handling (an all-zero
+  factor otherwise wins the first group's columns).
 
 **Aggregate recovery.** With matched values m₁,…,m_k: *recovery* =
 Σⱼ mⱼ / (#true groups) — penalizes missing groups; *precision* =
@@ -510,12 +544,15 @@ per-region purity, aligned confusion counts, and partition time.
 
 **Analysis unit.** The 16 replicates are independent generated datasets
 and are the unit of statistical inference. Within a dataset, the 10
-random-partition draws (Experiment 2) are **nested** — kept separate in
-all aggregates, never averaged into another draw — and all methods are
-*paired* on the same data, so method contrasts are computed as paired
-differences across the 16 datasets. Fit statuses (`failed_fit`,
-`failed_partition`) are reported as explicit failure rates rather than
-silently dropped from the analysis.
+random-partition draws (Experiment 2) are **nested** — preserved
+individually in all stored outputs, never averaged into another draw —
+and all methods are *paired* on the same data, so method contrasts are
+computed as paired differences across the 16 datasets. For inference
+involving random partitions, the ten draws' scores are first averaged
+*within* each dataset (draw-level spread may additionally be reported);
+the 16 within-dataset values then form the pairs. Fit statuses
+(`failed_fit`, `failed_partition`) are reported as explicit failure rates
+rather than silently dropped from the analysis.
 
 ## Appendix C. Reproducibility conventions
 
@@ -568,11 +605,11 @@ cardinality, and a favorable pilot precede any full nonlinear batch.
 
 | # | Item | Where the decision is recorded | Notes |
 |---|---|---|---|
-| 1 | Degenerate / zero-score factor metrics (both pipelines) | §3.4, §4.7, Appendix B | Empty support, zero recovery, reported frequency, conditional-on-valid averages, neutral tie handling. Changes metric outputs → golden-smoke regeneration required |
-| 2 | Capability-diagnostic cardinality | §4.6, §4.8 | Fixed 2^d states (8 / 16) for **both** standard and seeded inits, recorded per row; higher cardinality only as sensitivity. Requires golden-smoke regeneration |
+| 1 | Degenerate / zero-score factor metrics (both pipelines) | §3.4, §4.7, Appendix B | Explicit per-quantity semantics: empty support; support P/R/F1/Jaccard = 0; cosine = 0; raw AUPRC unchanged (= prevalence); adjusted AUPRC = 0; zeros enter primary support-recovery averages, with conditional-on-valid averages and degenerate frequency reported alongside; neutral tie handling. Changes metric outputs → golden-smoke regeneration required |
+| 2 | Capability-diagnostic cardinality | §4.6, §4.8 | Fixed 2^d states (8 / 16) for **both** standard and seeded inits, recorded per row — sufficient and conservative, not minimal (2^(d−1) states suffice even with flip noise); higher cardinality only as sensitivity. Requires golden-smoke regeneration |
 | 3 | Structure-diagnostic null | §4.8 | Repeated-permutation distributions; all-column permutation null for the product generator; report the analytic parity reference 1 − h₂(η) |
 | 4 | Matching-objective harmonization | §3.4, §4.7, Appendix B | Gaussian Hungarian matching switches to cosine as primary; AUPRC remains computed/reported |
 | 5 | Cluster-selection rule | §4.4 | Hungarian one-to-one alignment becomes the primary fit-cell rule; max-overlap retained as a labeled diagnostic |
-| 6 | Global-capacity controls | §1 | Supplementary grids: Gaussian global M = 10 (vs 5 vs 2 × 5); nonlinear global M = 8 (vs 4 vs 2 × 4). Larger global fits are scored against the concatenated group masks of both regions |
+| 6 | Global-capacity controls | §1 | Supplementary grids: Gaussian global M = 10 (vs 5 vs 2 × 5); nonlinear global M = 8 (vs 4 vs 2 × 4). Capacity comparison is apples-to-apples: **both** global budgets are scored against the same concatenated set of region-specific supports with the same matching rule, and the corresponding local aggregate (both regions' local fits pooled) is defined explicitly. The existing per-region recovery remains the primary workflow comparison |
 | 7 | Favorable pilot before full nonlinear grids | §1, §4.8 | Large n, low noise, oracle partition, no_routing, no nuisance; standard vs seeded init; support recovery and explained TC read together. Establishes where localization demonstrably helps vs. characterizes a limitation |
 | 8 | Optional: Gaussian fit seeds | §3.3 | Replace the fixed init seed 42 with derived per-fit seeds (changes results; the fixed seed is retained by default) |
