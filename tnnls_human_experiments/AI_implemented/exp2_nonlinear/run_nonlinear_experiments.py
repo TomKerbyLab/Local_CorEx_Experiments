@@ -760,9 +760,31 @@ def save_condition_metadata(condition, config, defaults, paths):
         json.dumps(metadata, indent=2, default=_json_safe))
 
 
+def parse_shard(shard):
+    """Parse a 'k/N' shard spec into (k, n); 0 <= k < N required."""
+    pieces = str(shard).split('/')
+    if len(pieces) != 2:
+        raise ValueError(f"Shard spec must be 'k/N', got {shard!r}.")
+    k, n = int(pieces[0]), int(pieces[1])
+    if n < 1:
+        raise ValueError(f"Shard count must be >= 1, got {n}.")
+    if not 0 <= k < n:
+        raise ValueError(f"Shard index must satisfy 0 <= {k} < {n}.")
+    return k, n
+
+
 def run_experiment(experiment_name, output_dir, repetitions=None,
-                   overwrite=False, include_no_routing=False, dry_run=False):
-    """Run one named experiment; skips completed condition pairs."""
+                   overwrite=False, include_no_routing=False, dry_run=False,
+                   shard=None, combine_only=False):
+    """Run one named experiment; skips completed condition pairs.
+
+    With ``shard`` as 'k/N', only every N-th condition (indices k, k+N,
+    ...) is attempted, so identical shard invocations can run in parallel
+    worker processes without overlap: conditions are deterministic and
+    self-contained, so the union of shards equals the serial run exactly.
+    A sharded run skips the end-of-run combine (each shard's snapshot
+    would be partial); run the runner with ``--combine-only`` afterwards.
+    """
     config = dict(EXPERIMENTS[experiment_name])
     config['builder'] = CONDITION_BUILDERS[experiment_name]
     if repetitions:
@@ -770,10 +792,20 @@ def run_experiment(experiment_name, output_dir, repetitions=None,
     if include_no_routing:
         config['corex_inputs'] = tuple(config['corex_inputs']) + (
             'no_routing',)
-    conditions = config['builder'](config.get('repetitions'))
+    all_conditions = config['builder'](config.get('repetitions'))
+    conditions = all_conditions
+    if combine_only:
+        combined = combine_results(output_dir, experiment_name)
+        print(f"Combined: {combined}")
+        return combined
+    if shard is not None:
+        shard_k, shard_n = parse_shard(shard)
+        conditions = all_conditions[shard_k::shard_n]
     print(
         f"Experiment: {experiment_name} ({len(conditions)} conditions, "
-        f"~{expected_fit_count(config, conditions):,} CorEx fits)"
+        f"~{expected_fit_count(config, conditions):,} CorEx fits"
+        + (f", shard {shard}" if shard is not None else "")
+        + ")"
     )
     if dry_run:
         return None
@@ -782,10 +814,12 @@ def run_experiment(experiment_name, output_dir, repetitions=None,
         'event': 'run_start',
         'experiment': experiment_name,
         'repetitions': config.get('repetitions'),
+        **({'shard': shard} if shard is not None else {}),
     })
     conditions_written = 0
     status = 'completed'
     started = time.time()
+    combined = None
     try:
         for index, condition in enumerate(conditions):
             paths = condition_output_paths(
@@ -810,7 +844,11 @@ def run_experiment(experiment_name, output_dir, repetitions=None,
                 pd.DataFrame(match_rows, columns=MATCH_COLUMNS),
                 paths['matches'])
             save_condition_metadata(condition, config, DEFAULTS, paths)
-        combined = combine_results(output_dir, experiment_name)
+        # a sharded run leaves the combine to a final --combine-only pass:
+        # each shard's own end-of-run snapshot would otherwise be partial
+        # and the last one to finish would win
+        if shard is None:
+            combined = combine_results(output_dir, experiment_name)
     except BaseException:
         status = 'failed'
         raise
@@ -901,6 +939,19 @@ def parse_arguments():
         action='store_true',
         help='Print the expected condition and fit counts without running.',
     )
+    parser.add_argument(
+        '--shard',
+        type=str,
+        help="Run only every N-th condition: 'k/N' with 0 <= k < N. "
+             "Shards are disjoint and cover all conditions exactly, so "
+             "N parallel workers reproduce the serial run's outputs.",
+    )
+    parser.add_argument(
+        '--combine-only',
+        action='store_true',
+        help='Skip fitting; recombine the per-condition CSVs that exist '
+             'under the output directory (used after a sharded run).',
+    )
     return parser.parse_args()
 
 
@@ -913,6 +964,8 @@ def main():
         overwrite=args.overwrite,
         include_no_routing=args.include_no_routing,
         dry_run=args.dry_run,
+        shard=args.shard,
+        combine_only=args.combine_only,
     )
 
 

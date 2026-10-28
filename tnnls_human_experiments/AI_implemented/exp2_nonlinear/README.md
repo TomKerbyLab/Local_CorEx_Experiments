@@ -17,7 +17,8 @@ and can then move to the normal human experiments location.
 | `structure_diagnostics.py` | >= 100k-sample diagnostics in bits: max |Pearson|, max pairwise MI, group TC, permuted TC; plus the capability diagnostic (standard EM ~0 TC on pure parity vs atom-seeded init reaching full TC). Run: `python structure_diagnostics.py`. |
 | `config.py` | All machine-readable knobs: fit defaults, per-experiment option tables, grid levels, root-seed bases. Plain Python (versioned, importable, validated by tests); grid loop logic stays in the runner. |
 | `seeds.py` | `derived_seed`: sha256 of serialized condition identifiers — the one process-independent identifier-to-seed rule (spec 00). |
-| `run_nonlinear_experiments.py` | Entry point. Runs conditions and writes restartable per-condition CSVs. Each generator gets one variant-spec table (estimator x corex-input recipe); downstream code never parses variant names. |
+| `run_nonlinear_experiments.py` | Entry point. Runs conditions and writes restartable per-condition CSVs. Each generator gets one variant-spec table (estimator x corex-input recipe); downstream code never parses variant names. `--shard k/N` attempts only every N-th condition (deterministic stride selection; shards cover the list exactly, so N parallel workers reproduce the serial run); `--combine-only` recombines per-condition CSVs without fitting. |
+| `parallel_runner.py` | Spawns N parallel shard workers of the runner for one experiment (one BLAS thread per worker), logs per shard under `<output-dir>/shard_logs/`, and recombines with `--combine-only` when all succeed. Interrupted batches resume by relaunching the same command. |
 | `summarize_nonlinear.py` | Per-fit summary CSV (random draws kept separate) + the 2x3-panel main-paper figure. |
 | `test_nonlinear.py` | The 10 spec validation tests + regression tests. `uv run pytest tnnls_human_experiments/AI_implemented/exp2_nonlinear/`. |
 
@@ -38,6 +39,11 @@ python run_nonlinear_experiments.py continuous_core --output-dir nonlinear_resul
 
 # secondary corex-input variant (routing columns dropped from the fit)
 python run_nonlinear_experiments.py discrete_core --include-no-routing
+
+# parallel: 16 shard workers (measured: parity n=5000/region is the slow
+# condition at ~2.8 h; 16 workers put both core grids well under a day)
+python parallel_runner.py discrete_core --workers 16 --output-dir nonlinear_results
+python parallel_runner.py continuous_core --workers 16 --output-dir nonlinear_results
 
 # >= 100k structure + capability diagnostics
 python structure_diagnostics.py --output-dir nonlinear_results

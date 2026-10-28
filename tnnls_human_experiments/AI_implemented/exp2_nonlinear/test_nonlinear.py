@@ -475,3 +475,32 @@ def test_module_validators_pass():
     assert partitioning.validate_partitioning()['collapsed_partition_checked']
     assert corex_fitting.validate_corex_fitting()
     assert recovery_metrics.validate_recovery_metrics()
+
+
+def test_shard_specs_parse_and_validate():
+    assert runner.parse_shard('0/4') == (0, 4)
+    with pytest.raises(ValueError):
+        runner.parse_shard('4/4')
+    with pytest.raises(ValueError):
+        runner.parse_shard('-1/4')
+    with pytest.raises(ValueError):
+        runner.parse_shard('3')
+    with pytest.raises(ValueError):
+        runner.parse_shard('0/0')
+
+
+def test_shard_partition_is_exact_disjoint_cover():
+    # Sharding is an order-preserving stride selection: the union of all
+    # N shards equals the unfiltered condition list exactly (as a
+    # multiset — shard k keeps every list element whose index % N == k),
+    # so parallel shards reproduce the serial run's outputs exactly.
+    conditions = runner.CONDITION_BUILDERS['discrete_core'](3)
+    n_shards = 7  # deliberately not a divisor of the condition count
+    shards = [conditions[k::n_shards] for k in range(n_shards)]
+    rebuilt = [json.dumps(c, sort_keys=True) for shard in shards
+               for c in shard]
+    reference = [json.dumps(c, sort_keys=True) for c in conditions]
+    assert len(rebuilt) == len(reference)
+    assert sorted(rebuilt) == sorted(reference)
+    # no condition is attempted twice across shards
+    assert len(set(rebuilt)) == len(rebuilt)

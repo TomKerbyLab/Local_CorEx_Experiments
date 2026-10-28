@@ -3,6 +3,14 @@
 Each repetition and data-generating condition is saved separately. Completed
 files are skipped by default, so interrupted experiments can be restarted
 without repeating finished work. A combined CSV is rebuilt after the run.
+
+Parallel execution: `parse_shard` and `enumerate_conditions` mirror the
+sharding scheme of ../exp2_nonlinear/run_nonlinear_experiments.py — a
+'k/N' shard attempts only every N-th condition of the deterministic
+condition enumeration, so N parallel workers (parallel_runner.py in the
+same directory here) reproduce the serial run exactly. A sharded run
+skips the end-of-run combine (each shard's snapshot would be partial);
+combine afterwards with --combine-only.
 """
 
 import argparse
@@ -108,13 +116,77 @@ def expected_fit_count(config, repetitions=None):
     )
 
 
+def parse_shard(shard):
+    """Parse a 'k/N' shard spec into (k, n); 0 <= k < N required."""
+    pieces = str(shard).split('/')
+    if len(pieces) != 2:
+        raise ValueError(f"Shard spec must be 'k/N', got {shard!r}.")
+    k, n = int(pieces[0]), int(pieces[1])
+    if n < 1:
+        raise ValueError(f"Shard count must be >= 1, got {n}.")
+    if not 0 <= k < n:
+        raise ValueError(f"Shard index must satisfy 0 <= {k} < {n}.")
+    return k, n
+
+
+def enumerate_conditions(config, num_repetitions):
+    """Enumerate every condition in the runner's deterministic loop order.
+
+    The explicit list is what sharding slices: the nested loops below used
+    to be the iteration itself; now they only build the list, and the run
+    loop iterates over the (shard-filtered) list. Same order, same skip
+    logic — this is purely the enumerable form of the old nest.
+    """
+    conditions = []
+    for setup in config['setups']:
+        for sample_size in config['sample_sizes']:
+            for nuisance_dimensions in config['nuisance_dimensions']:
+                for rep in range(num_repetitions):
+                    conditions.append({
+                        'setup': setup,
+                        'sample_size': sample_size,
+                        'nuisance_dimensions': nuisance_dimensions,
+                        'rep': rep,
+                    })
+    return conditions
+
+
+def condition_output_path_from(condition, output_dir, experiment):
+    return condition_output_path(
+        output_dir, experiment, condition['setup'],
+        condition['sample_size'], condition['nuisance_dimensions'],
+        condition['rep'],
+    )
+
+
 def run_experiment(experiment, output_dir, repetitions=None,
-                   overwrite=False, dry_run=False):
-    """Run one named experiment configuration."""
+                   overwrite=False, dry_run=False, shard=None,
+                   combine_only=False):
+    """Run one named experiment configuration.
+
+    With ``shard`` as 'k/N', only every N-th condition (indices k, k+N,
+    ...) of the enumerated list is attempted, so identical shard
+    invocations can run as parallel workers without overlap.
+    """
     config = EXPERIMENTS[experiment]
     num_repetitions = repetitions or config['repetitions']
-    print(f"Experiment: {experiment}")
-    print(f"Expected CorEx fits: {expected_fit_count(config, num_repetitions):,}")
+    all_conditions = enumerate_conditions(config, num_repetitions)
+    conditions = all_conditions
+    if combine_only:
+        combined_path = combine_results(output_dir, experiment)
+        print(f"Combined results: {combined_path}" if combined_path
+              else "No condition files to combine.")
+        return combined_path
+    if shard is not None:
+        shard_k, shard_n = parse_shard(shard)
+        conditions = all_conditions[shard_k::shard_n]
+    print(
+        f"Experiment: {experiment}"
+        + (f", shard {shard}" if shard is not None else "")
+        + f" ({len(conditions)} conditions of {len(all_conditions)})"
+    )
+    print(f"Expected CorEx fits across the full grid: "
+          f"{expected_fit_count(config, num_repetitions):,}")
     if dry_run:
         return None
 
@@ -123,66 +195,65 @@ def run_experiment(experiment, output_dir, repetitions=None,
         'event': 'run_start',
         'experiment': experiment,
         'repetitions': num_repetitions,
+        **({'shard': shard} if shard is not None else {}),
     })
     conditions_written = 0
     conditions_skipped = 0
     failed_conditions = []
     status = 'completed'
     try:
-        for setup in config['setups']:
+        for condition in conditions:
+            setup = condition['setup']
             setup_flags = SETUP_FLAGS[setup]
-            for sample_size in config['sample_sizes']:
-                for nuisance_dimensions in config['nuisance_dimensions']:
-                    for rep in range(num_repetitions):
-                        output_path = condition_output_path(
-                            output_dir,
-                            experiment,
-                            setup,
-                            sample_size,
-                            nuisance_dimensions,
-                            rep,
-                        )
-                        if output_path.exists() and not overwrite:
-                            conditions_skipped += 1
-                            print(f"Skipping completed condition: {output_path}")
-                            continue
+            output_path = condition_output_path_from(
+                condition, output_dir, experiment)
+            if output_path.exists() and not overwrite:
+                conditions_skipped += 1
+                print(f"Skipping completed condition: {output_path}")
+                continue
 
-                        print(
-                            f"Running {experiment}: setup={setup}, "
-                            f"n={sample_size}, nuisance={nuisance_dimensions}, "
-                            f"rep={rep}"
-                        )
-                        # One failing condition must not abort the whole
-                        # experiment: the rest of the grid still fits, and the
-                        # failed condition is retried on the next invocation.
-                        try:
-                            results = lc_simulation.run_simulation(
-                                rep=rep,
-                                cluster_size=sample_size,
-                                alphas=config['alphas'],
-                                num_factors=config['num_factors'],
-                                estimators=config['estimators'],
-                                partition_methods=config['partition_methods'],
-                                same_dist=setup_flags['same_dist'],
-                                disjoint=setup_flags['disjoint'],
-                                nuisance_dimensions=nuisance_dimensions,
-                                progress=True,
-                            )
-                        except Exception as exc:
-                            print(f"FAILED condition {output_path}: "
-                                  f"{type(exc).__name__}: {exc}")
-                            failed_conditions.append(output_path)
-                            continue
-                        results.insert(0, 'experiment', experiment)
-                        write_csv_atomically(results, output_path)
-                        conditions_written += 1
+            print(
+                f"Running {experiment}: setup={setup}, "
+                f"n={condition['sample_size']}, "
+                f"nuisance={condition['nuisance_dimensions']}, "
+                f"rep={condition['rep']}"
+            )
+            # One failing condition must not abort the whole
+            # experiment: the rest of the grid still fits, and the
+            # failed condition is retried on the next invocation.
+            try:
+                results = lc_simulation.run_simulation(
+                    rep=condition['rep'],
+                    cluster_size=condition['sample_size'],
+                    alphas=config['alphas'],
+                    num_factors=config['num_factors'],
+                    estimators=config['estimators'],
+                    partition_methods=config['partition_methods'],
+                    same_dist=setup_flags['same_dist'],
+                    disjoint=setup_flags['disjoint'],
+                    nuisance_dimensions=condition['nuisance_dimensions'],
+                    progress=True,
+                )
+            except Exception as exc:
+                print(f"FAILED condition {output_path}: "
+                      f"{type(exc).__name__}: {exc}")
+                failed_conditions.append(output_path)
+                continue
+            results.insert(0, 'experiment', experiment)
+            write_csv_atomically(results, output_path)
+            conditions_written += 1
 
         # run_end (logged in finally) should distinguish a fully clean run
         # from one that finished with failed conditions.
         if failed_conditions:
             status = 'completed_with_failures'
 
-        combined_path = combine_results(output_dir, experiment)
+        # a sharded run leaves the combine to a final --combine-only pass:
+        # each shard's own end-of-run snapshot would otherwise be partial
+        # and the last one to finish would win
+        combined_path = None
+        if shard is None:
+            combined_path = combine_results(output_dir, experiment)
     except BaseException:
         status = 'failed'
         raise
@@ -243,6 +314,19 @@ def parse_arguments():
         action='store_true',
         help='Print the expected fit count without running models.',
     )
+    parser.add_argument(
+        '--shard',
+        type=str,
+        help="Run only every N-th condition: 'k/N' with 0 <= k < N. "
+             "Shards are disjoint and cover all conditions exactly, so "
+             "N parallel workers reproduce the serial run's outputs.",
+    )
+    parser.add_argument(
+        '--combine-only',
+        action='store_true',
+        help='Skip fitting; recombine the per-condition CSVs that exist '
+             'under the output directory (used after a sharded run).',
+    )
     return parser.parse_args()
 
 
@@ -254,6 +338,8 @@ def main():
         repetitions=args.repetitions,
         overwrite=args.overwrite,
         dry_run=args.dry_run,
+        shard=args.shard,
+        combine_only=args.combine_only,
     )
 
 
