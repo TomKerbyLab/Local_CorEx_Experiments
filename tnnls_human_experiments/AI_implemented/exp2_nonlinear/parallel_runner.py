@@ -113,7 +113,10 @@ def worker_env():
 
 def main():
     args = parse_arguments()
-    log_dir = args.output_dir / 'shard_logs'
+    # namespace by experiment: two launchers sharing one output directory
+    # must not overwrite each other's per-shard logs (caught live when the
+    # discrete and continuous grids ran concurrent 32-worker batches)
+    log_dir = args.output_dir / 'shard_logs' / args.experiment
     log_dir.mkdir(parents=True, exist_ok=True)
 
     started = time.time()
