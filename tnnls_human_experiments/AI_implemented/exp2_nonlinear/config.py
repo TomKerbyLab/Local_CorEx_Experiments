@@ -43,22 +43,30 @@ EXPERIMENTS = {
         'corex_inputs': BASE_COREX_INPUTS,
         'native_gaussian_bio': False,
     },
+    # repetitions lives here (not per-invocation): the spec'd grid is
+    # 16 paired replicates per condition (§4.3); --repetitions still
+    # overrides it. The smoke builder hard-codes its 2 conditions and
+    # ignores this key.
     'discrete_core': {
+        'repetitions': 16,
         'estimators': BASE_ESTIMATORS,
         'corex_inputs': BASE_COREX_INPUTS,
         'native_gaussian_bio': False,
     },
     'continuous_core': {
+        'repetitions': 16,
         'estimators': BASE_ESTIMATORS,
         'corex_inputs': BASE_COREX_INPUTS,
         'native_gaussian_bio': True,
     },
     'discrete_supplementary': {
+        'repetitions': 16,
         'estimators': BASE_ESTIMATORS,
         'corex_inputs': BASE_COREX_INPUTS,
         'native_gaussian_bio': False,
     },
     'continuous_supplementary': {
+        'repetitions': 16,
         'estimators': BASE_ESTIMATORS,
         'corex_inputs': BASE_COREX_INPUTS,
         'native_gaussian_bio': False,
