@@ -1,0 +1,44 @@
+{
+  "condition": {
+    "generator": "redundant",
+    "d": 4,
+    "n_samples": 500,
+    "dim_hidden": 2,
+    "n_repeat": 5,
+    "root_seed": 4126
+  },
+  "config": {
+    "repetitions": 32,
+    "d_levels": [
+      3,
+      4,
+      5
+    ],
+    "n_levels": [
+      500,
+      5000
+    ],
+    "arm": "binary",
+    "bio_n_repeat": 5
+  },
+  "defaults": {
+    "n_factors": 3,
+    "support_fraction": 0.8,
+    "bio_max_iter": 200,
+    "n_char": 100000,
+    "tie_seed": 0
+  },
+  "calibration": [
+    {
+      "d": 4,
+      "generator": "redundant",
+      "tc_target": 0.5,
+      "eta": 0.18558390641313943,
+      "tc_residual_bits": 8.881784197001252e-16,
+      "tc_population": 0.5000000000000009,
+      "dtc_population": 0.34959284110784417,
+      "omega_population": 0.15040715889215672,
+      "mean_pmi_population": 0.11593379454844777
+    }
+  ]
+}

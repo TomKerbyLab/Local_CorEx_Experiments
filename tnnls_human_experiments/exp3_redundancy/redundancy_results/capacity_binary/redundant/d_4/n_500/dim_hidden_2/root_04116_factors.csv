@@ -1,0 +1,4 @@
+generator,d,n_samples,dim_hidden,n_repeat,root_seed,eta,n_nuisance,factor_index,factor_tc,is_top_tc_factor,auprc,topd_precision,topd_recall,topd_f1,topd_jaccard,nfp_topd,support_size,support_density,support_f1,nfp_support,degenerate_factor,fit_status
+redundant,4,500,2,5,4116,0.18558390641313943,20,0,0.41131344977223117,1,1.0,1.0,1.0,1.0,1.0,0.0,4,0.16666666666666666,1.0,0.0,0,ok
+redundant,4,500,2,5,4116,0.18558390641313943,20,1,0.02741079326659579,0,0.14772727272727273,0.0,0.0,0.0,0.0,1.0,4,0.16666666666666666,0.0,1.0,0,ok
+redundant,4,500,2,5,4116,0.18558390641313943,20,2,0.025582359678577363,0,0.15625,0.0,0.0,0.0,0.0,1.0,3,0.125,0.0,1.0,0,ok

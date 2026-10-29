@@ -1,0 +1,44 @@
+{
+  "condition": {
+    "generator": "synergistic",
+    "d": 3,
+    "n_samples": 5000,
+    "dim_hidden": 2,
+    "n_repeat": 5,
+    "root_seed": 4116
+  },
+  "config": {
+    "repetitions": 32,
+    "d_levels": [
+      3,
+      4,
+      5
+    ],
+    "n_levels": [
+      500,
+      5000
+    ],
+    "arm": "binary",
+    "bio_n_repeat": 5
+  },
+  "defaults": {
+    "n_factors": 3,
+    "support_fraction": 0.8,
+    "bio_max_iter": 200,
+    "n_char": 100000,
+    "tie_seed": 0
+  },
+  "calibration": [
+    {
+      "d": 3,
+      "generator": "synergistic",
+      "tc_target": 0.5,
+      "eta": 0.11002786443835949,
+      "tc_residual_bits": 4.440892098500626e-16,
+      "tc_population": 0.5000000000000004,
+      "dtc_population": 1.0000000000000009,
+      "omega_population": -0.5000000000000004,
+      "mean_pmi_population": 0.0
+    }
+  ]
+}
