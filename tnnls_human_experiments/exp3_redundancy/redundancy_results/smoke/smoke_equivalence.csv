@@ -1,2 +1,2 @@
 d,n_samples,dim_hidden,n_repeat,n_pairs,tc_difference_mean,tc_difference_se,tc_difference_ci_low,tc_difference_ci_high,equivalent_within_margin,margin_bits
-3,500,4,1,2,0.12892705074815247,0.1825845744028785,-0.2289321392980423,0.48678624079434724,False,0.05
+3,500,4,1,2,0.18600241675079937,0.26341386003385475,-0.33027926206538677,0.7022840955669856,False,0.05

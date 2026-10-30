@@ -24,6 +24,8 @@ from time import time
 import numpy as np
 from local_corex import BioCorex
 
+_LN_2 = np.log(2.0)
+
 
 class BioCorexAtomSeeded(BioCorex):
     """BioCorex with a hard one-hot latent initialization on atom identity.
@@ -91,8 +93,12 @@ def fit_bio_corex(data, num_factors, model_seed, dim_hidden=2,
         np.random.set_state(rng_state)
     elapsed = time() - start_time
 
-    tcs = np.asarray(model.tcs, dtype=float)
-    mis = np.asarray(model.mis, dtype=float)
+    # local_corex computes factor TCs and MIs in NATS (exp2's
+    # _tcs_to_bits convention); report in BITS so the fit summary matches
+    # population quantities and the equivalence margins, which are bits
+    # with log-base-2 identities.
+    tcs = np.asarray(model.tcs, dtype=float) / _LN_2
+    mis = np.asarray(model.mis, dtype=float) / _LN_2
     history = getattr(model, 'tc_history', None) or []
     return {
         'model': model,

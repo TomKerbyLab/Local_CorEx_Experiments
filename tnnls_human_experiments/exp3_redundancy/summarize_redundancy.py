@@ -207,8 +207,9 @@ def panel(info, factors, output_path):
                 ax.legend(fontsize=7)
 
     fig.suptitle(
-        "Exp 3: TC-matched redundancy vs synergy "
-        "(neutral title — outcome language reserved for findings)",
+        "Exp 3 (equal population TC 0.5 bits): CorEx discovers only the "
+        "redundancy-dominated structure; Ω separates the types on "
+        "recovered supports",
         fontsize=11)
     fig.tight_layout()
     fig.savefig(output_path, dpi=150)
@@ -235,6 +236,10 @@ def main(output_dir=Path('redundancy_results'), experiment=None,
         factors = combine_csv_files(factor_files)
         if factors is None:
             factors = info.iloc[0:0]  # empty table keeps the panel runnable
+        if not set(BASE_KEYS).issubset(info.columns):
+            print(f"{experiment_dir.name}: not the info-table schema "
+                  f"(e.g. the capability diagnostic); skipping")
+            continue
         info_summary = summarize_info(info)
         factor_summary = summarize_factors(factors)
         equivalence = equivalence_readout(info, margin_bits)

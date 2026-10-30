@@ -1,0 +1,19 @@
+{
+  "d": 5,
+  "n_samples": 5000,
+  "root_seed": 4104,
+  "eta": 0.11002786443835905,
+  "tc_target": 0.5,
+  "dim_hidden_states": 32,
+  "analytic_tc_bits": 0.5000000000000036,
+  "uses_ground_truth_init": true,
+  "fit_status": "ok",
+  "note": "standard EM vs atom-seeded one-hot init at the same 2^d-state cardinality on the parity group block; the seeded fit is a capability statement only (flagged) and never enters recovery summaries.",
+  "atom_count": 32,
+  "std_init_tc_bits": 1.617346466787067e-05,
+  "std_init_converged": true,
+  "std_init_runtime_s": 8.02874207496643,
+  "seeded_init_tc_bits": 0.5191115117086339,
+  "seeded_init_converged": true,
+  "seeded_init_runtime_s": 3.4038991928100586
+}

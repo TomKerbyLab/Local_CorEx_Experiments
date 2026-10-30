@@ -27,6 +27,7 @@ import json
 import numpy as np
 import pytest
 
+import corex_fitting
 import redundancy_data as rdata
 import information_estimates as info_est
 import recovery_metrics as rmetrics
@@ -202,6 +203,19 @@ def test_fit_selection_procedure():
     order = rmetrics.descending_order(fit['tcs'])
     assert fit['tcs'][order[0]] == fit['tcs'].max()
     assert not fit['uses_ground_truth_init']
+
+
+def test_fit_reports_tcs_in_bits():
+    # Unit check: local_corex computes factor TCs in NATS; fit_bio_corex
+    # must report BITS. A noiseless redundant block of d columns has
+    # population TC exactly d-1 bits; the recovered top factor's TC must
+    # match in the reported (bit-based) units, not nats.
+    rng = np.random.default_rng(12)
+    X = rdata.redundant_group(rng, 6, 20_000, 0.0)
+    fit = corex_fitting.fit_bio_corex(
+        X, 1, model_seed=derived_seed(12, 'units'),
+        dim_hidden=2, n_repeat=1, max_iter=50)
+    assert fit['tcs'][0] == pytest.approx(5.0, abs=0.1)  # bits, not nats
 
 
 def test_characterization_sample_is_fit_independent():

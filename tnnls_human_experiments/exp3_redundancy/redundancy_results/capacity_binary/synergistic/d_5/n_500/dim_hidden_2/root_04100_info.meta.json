@@ -8,7 +8,7 @@
     "root_seed": 4100
   },
   "config": {
-    "repetitions": 2,
+    "repetitions": 32,
     "d_levels": [
       3,
       4,

@@ -66,3 +66,39 @@
 {"utc": "2026-10-29T11:03:06+00:00", "event": "run_end", "experiment": "capacity_binary", "status": "completed", "conditions_written": 48, "conditions_skipped": 0, "elapsed_s": 7184.085}
 {"utc": "2026-10-29T11:08:32+00:00", "event": "run_end", "experiment": "capacity_binary", "status": "completed", "conditions_written": 48, "conditions_skipped": 0, "elapsed_s": 7509.731}
 {"utc": "2026-10-29T11:09:52+00:00", "event": "run_end", "experiment": "capacity_binary", "status": "completed", "conditions_written": 48, "conditions_skipped": 0, "elapsed_s": 7589.372}
+{"utc": "2026-10-30T04:17:45+00:00", "event": "run_start", "experiment": "core", "repetitions": 32, "shard": "1/8"}
+{"utc": "2026-10-30T04:17:49+00:00", "event": "run_start", "experiment": "core", "repetitions": 32, "shard": "6/8"}
+{"utc": "2026-10-30T04:17:49+00:00", "event": "run_start", "experiment": "core", "repetitions": 32, "shard": "2/8"}
+{"utc": "2026-10-30T04:17:50+00:00", "event": "run_start", "experiment": "core", "repetitions": 32, "shard": "0/8"}
+{"utc": "2026-10-30T04:17:50+00:00", "event": "run_start", "experiment": "core", "repetitions": 32, "shard": "3/8"}
+{"utc": "2026-10-30T04:17:50+00:00", "event": "run_start", "experiment": "core", "repetitions": 32, "shard": "4/8"}
+{"utc": "2026-10-30T04:17:50+00:00", "event": "run_start", "experiment": "core", "repetitions": 32, "shard": "5/8"}
+{"utc": "2026-10-30T04:17:50+00:00", "event": "run_start", "experiment": "core", "repetitions": 32, "shard": "7/8"}
+{"utc": "2026-10-29T22:18:45-0600", "event": "run_start", "experiment": "parity_capability", "repetitions": 8}
+{"utc": "2026-10-29T22:23:44-0600", "event": "run_end", "experiment": "parity_capability", "status": "completed", "conditions_written": 48, "conditions_skipped": 0, "elapsed_s": 298.54285430908203}
+{"utc": "2026-10-30T09:22:19+00:00", "event": "run_end", "experiment": "core", "status": "completed", "conditions_written": 48, "conditions_skipped": 0, "elapsed_s": 18269.386}
+{"utc": "2026-10-30T09:33:13+00:00", "event": "run_end", "experiment": "core", "status": "completed", "conditions_written": 48, "conditions_skipped": 0, "elapsed_s": 18923.95}
+{"utc": "2026-10-30T09:50:53+00:00", "event": "run_end", "experiment": "core", "status": "completed", "conditions_written": 48, "conditions_skipped": 0, "elapsed_s": 19983.689}
+{"utc": "2026-10-30T09:53:04+00:00", "event": "run_end", "experiment": "core", "status": "completed", "conditions_written": 48, "conditions_skipped": 0, "elapsed_s": 20114.134}
+{"utc": "2026-10-30T09:55:12+00:00", "event": "run_end", "experiment": "core", "status": "completed", "conditions_written": 48, "conditions_skipped": 0, "elapsed_s": 20241.775}
+{"utc": "2026-10-30T09:58:17+00:00", "event": "run_end", "experiment": "core", "status": "completed", "conditions_written": 48, "conditions_skipped": 0, "elapsed_s": 20431.581}
+{"utc": "2026-10-30T10:05:36+00:00", "event": "run_end", "experiment": "core", "status": "completed", "conditions_written": 48, "conditions_skipped": 0, "elapsed_s": 20866.333}
+{"utc": "2026-10-30T10:08:14+00:00", "event": "run_end", "experiment": "core", "status": "completed", "conditions_written": 48, "conditions_skipped": 0, "elapsed_s": 21023.557}
+{"utc": "2026-10-30T10:08:28+00:00", "event": "run_start", "experiment": "capacity_binary", "repetitions": 32, "shard": "3/8"}
+{"utc": "2026-10-30T10:08:28+00:00", "event": "run_start", "experiment": "capacity_binary", "repetitions": 32, "shard": "6/8"}
+{"utc": "2026-10-30T10:08:28+00:00", "event": "run_start", "experiment": "capacity_binary", "repetitions": 32, "shard": "2/8"}
+{"utc": "2026-10-30T10:08:28+00:00", "event": "run_start", "experiment": "capacity_binary", "repetitions": 32, "shard": "5/8"}
+{"utc": "2026-10-30T10:08:28+00:00", "event": "run_start", "experiment": "capacity_binary", "repetitions": 32, "shard": "0/8"}
+{"utc": "2026-10-30T10:08:28+00:00", "event": "run_start", "experiment": "capacity_binary", "repetitions": 32, "shard": "1/8"}
+{"utc": "2026-10-30T10:08:28+00:00", "event": "run_start", "experiment": "capacity_binary", "repetitions": 32, "shard": "7/8"}
+{"utc": "2026-10-30T10:08:28+00:00", "event": "run_start", "experiment": "capacity_binary", "repetitions": 32, "shard": "4/8"}
+{"utc": "2026-10-30T12:02:38+00:00", "event": "run_end", "experiment": "capacity_binary", "status": "completed", "conditions_written": 48, "conditions_skipped": 0, "elapsed_s": 6850.736}
+{"utc": "2026-10-30T12:03:45+00:00", "event": "run_end", "experiment": "capacity_binary", "status": "completed", "conditions_written": 48, "conditions_skipped": 0, "elapsed_s": 6917.231}
+{"utc": "2026-10-30T12:07:46+00:00", "event": "run_end", "experiment": "capacity_binary", "status": "completed", "conditions_written": 48, "conditions_skipped": 0, "elapsed_s": 7157.737}
+{"utc": "2026-10-30T12:09:41+00:00", "event": "run_end", "experiment": "capacity_binary", "status": "completed", "conditions_written": 48, "conditions_skipped": 0, "elapsed_s": 7273.197}
+{"utc": "2026-10-30T12:13:15+00:00", "event": "run_end", "experiment": "capacity_binary", "status": "completed", "conditions_written": 48, "conditions_skipped": 0, "elapsed_s": 7487.387}
+{"utc": "2026-10-30T12:16:04+00:00", "event": "run_end", "experiment": "capacity_binary", "status": "completed", "conditions_written": 48, "conditions_skipped": 0, "elapsed_s": 7655.815}
+{"utc": "2026-10-30T12:18:19+00:00", "event": "run_end", "experiment": "capacity_binary", "status": "completed", "conditions_written": 48, "conditions_skipped": 0, "elapsed_s": 7790.959}
+{"utc": "2026-10-30T12:21:03+00:00", "event": "run_end", "experiment": "capacity_binary", "status": "completed", "conditions_written": 48, "conditions_skipped": 0, "elapsed_s": 7955.183}
+{"utc": "2026-10-30T12:21:17+00:00", "event": "run_start", "experiment": "smoke", "repetitions": 2}
+{"utc": "2026-10-30T12:21:49+00:00", "event": "run_end", "experiment": "smoke", "status": "completed", "conditions_written": 4, "conditions_skipped": 0, "elapsed_s": 32.247}

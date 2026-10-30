@@ -1,0 +1,2 @@
+d,n_samples,root_seed,eta,tc_target,dim_hidden_states,analytic_tc_bits,std_init_tc_bits,std_init_converged,std_init_runtime_s,seeded_init_tc_bits,seeded_init_converged,seeded_init_runtime_s,atom_count,uses_ground_truth_init,fit_status,note
+4,5000,4102,0.11002786443835944,0.5,16,0.5,1.034984644242633e-05,True,3.8925015926361084,0.4962581236377584,True,1.6256883144378662,16,True,ok,standard EM vs atom-seeded one-hot init at the same 2^d-state cardinality on the parity group block; the seeded fit is a capability statement only (flagged) and never enters recovery summaries.

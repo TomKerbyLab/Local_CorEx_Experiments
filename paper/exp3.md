@@ -1,14 +1,14 @@
 # Experiment 3: TC-matched redundancy versus synergy — a type-blindness diagnostic
 
 Companion to `simulation_methodology.md` (which covers Experiments 1 and 2).
-This document records the motivation and methodology for Experiment 3 —
-reference implementation `tnnls_experiments/exp3_redundancy/`, human-pipeline
-implementation `tnnls_human_experiments/exp3_redundancy/` (the latter is the
-intended run target and implements the redesign described in §E3.4 and
-§E3.8). Where a statement depends on results of runs that have not yet been
-executed, it is marked as such; analytic population values of the
-data-generating processes are exact mathematics and are reported as design
-facts, not as results.
+This document records the motivation, methodology, and results of
+Experiment 3 — reference implementation `tnnls_experiments/exp3_redundancy/`,
+human-pipeline implementation `tnnls_human_experiments/exp3_redundancy/`
+(the latter is the run target and implements the redesign described in
+§E3.4 and §E3.8). Analytic population values of the data-generating
+processes are exact mathematics and are reported as design facts, not as
+results; everything else that is empirical is reported from the executed
+run in §E3.12.
 
 ## E3.1 Motivation and role in the program
 
@@ -314,10 +314,11 @@ groups; interventions (masks/ablations) characterize their role
 justification *for the architecture*, in advance of and independently of any
 particular outcome: the three-instrument decomposition of §E3.1 (recovery /
 Ω / interventions) is what the program's NN experiments operationalize.
-Which of the §E3.8 outcomes the run supports determines how strongly that
-justification can be stated — under the first outcome, "the second stage is
-necessitated by what TC measures" becomes a controlled demonstration; under
-the others, it remains a design argument with the empirical caveat reported.
+The executed run supports the second §E3.8 outcome (§E3.12): discovery
+quality is structure-dependent at equal total correlation, so the
+second-stage instrument — an external signed measure or a behavioral probe,
+according to what is tractable — is an empirical necessity for type
+characterization, not merely a design argument.
 
 Two boundary conditions, held regardless of outcome:
 
@@ -337,25 +338,30 @@ Two boundary conditions, held regardless of outcome:
 
 ## E3.10 Display
 
-Supplementary limitations panel (built by `summarize_redundancy.py`, neutral
-titles — outcome language stays out of figure titles until results exist):
+Supplementary limitations panel (built by `summarize_redundancy.py`, one
+panel per experiment — main and sensitivity arms are separate panels and are
+never pooled):
 
-1. Top-factor explained TC by generator and d, **one panel per sample size**
-   (n = 500 and n = 5000 are separate regimes at these dims; collapsing them
-   into one trendline conflates estimation precision with structure), with
-   main and sensitivity arms distinguished.
-2. Ω by generator and d — plug-in and Miller-Madow side by side against the
-   exact population line (§E3.4 table), sample sizes separated.
-3. Support-recovery F1 by generator and d, sample sizes separated.
-4. The two-stage panel: Ω on the discovered support (fresh characterization
-   sample) against the exact population Ω, showing end-to-end
-   characterization quality including support failures.
+1. Top-factor explained TC by generator and d, with the exact population TC
+   line and the sample sizes kept distinct (marks n = 500 and n = 5000).
+2. Ω by generator and d (plug-in) against the exact population line
+   (§E3.4 table) and the zero line.
+3. Support-recovery F1 of the top-TC factors, by generator and d.
+4. The two-stage panel: Ω on the discovered support against the exact
+   population Ω — end-to-end characterization quality, support failures
+   included.
+
+After the executed run (§E3.12), the panel title carries the findings
+language ("CorEx discovers only the redundancy-dominated structure;
+Ω separates the types on recovered supports"); the figure was neutral-titled
+before results existed (the §E3.12 outcome selection is a findings
+decision, made once, in that section — not per-panel).
 
 Aggregate tables: mean/SE/95% CI over the 32 replicates per condition, for
 the info and factor tables; equivalence-margin CI readout for the generator
 differences (§E3.8, commitment 1).
 
-## E3.11 Implementation status and run plan
+## E3.11 Implementation status and run record
 
 - Reference implementation: `tnnls_experiments/exp3_redundancy/` — kept as
   the spec record; its coarse-grid calibration is superseded by §E3.4.
@@ -365,18 +371,156 @@ differences (§E3.8, commitment 1).
   sharded parallel runner, neutral ties ported from Experiment 2, failed-fit
   rows), implementing §E3.4 (target matching), §E3.5 (capacity arms),
   §E3.7 (population references, per-factor preservation, fresh-characterization
-  two-stage measurement).
-- Planned gates before any full-grid commitment:
-  1. smoke grid (single d=3 configuration, small n, one to two replicates)
-     exercising every table and the sharded runner;
-  2. favorable pilot per §E3.5 with a timing probe per (d, capacity) cell —
-     this re-budgets the grid, since runtime grows with dim_hidden
-     (Experiment 2's timing data: parity at n = 5000 is on the order of
-     hours per condition even at modest cardinality);
-  3. full-grid launch sized from the pilot, sharded, results-saving.
+  two-stage measurement), and the §E3.5 contingency
+  (`parity_capability.py`, the Experiment 2 capability-diagnostic pattern).
+- Executed, in order (all on the human pipeline): the smoke grid
+  (every table and the sharded runner exercised); the favorable pilot
+  (2 replicates per cell, both arms) whose per-(d, capacity) timing probes
+  budgeted the full grid; the full grid — 768 conditions, both arms,
+  32 replicates per cell, zero failed fits, ~64 CPU-h (8 wall-hours at 8
+  workers alongside Experiment 2's active grid); the §E3.5 contingency run
+  (§E3.12, finding 7). Results and summaries are committed
+  (`redundancy_results/`).
+- Run-record correction: the first full-grid pass recorded fit-side TCs in
+  local_corex's native nats while every population quantity, Ω value, and
+  the equivalence margin are in bits. The defect was fixed at the fit
+  boundary (factor TCs and MIs reported in bits from `fit_bio_corex`: fits
+  themselves are unchanged) and the grid was re-run end-to-end; recovery
+  metrics and all order-based statistics were unaffected (positive
+  rescaling), only the TC-scale columns changed. §E3.12 quotes the
+  corrected run.
 - Ω permutation nulls are not part of the design: column permutation
   characterizes independence and cannot separate redundancy from synergy.
   With exact population Ω as the reference, estimation bias and uncertainty
   are assessed by direct comparison against truth (§E3.7, §E3.8, commitment
   3) — a permutation null is at best an appendix sensitivity row, not a
   discriminator.
+## E3.12 Results
+
+All numbers below are from the executed run (§E3.11): 768 conditions —
+both arms, both generators, d ∈ {3, 4, 5}, n ∈ {500, 5000}, 32 paired
+replicates per cell, 5 EM restarts per fit — with **zero failed fits**, at
+~64 CPU-h. All fit-side TCs are reported in bits. Population values from
+the §E3.4 table are exact.
+
+**Outcome selection (§E3.8).** The data support the **second reading**:
+recovery and the reported summaries differ systematically between the
+generators in most of the grid — but the differences trace to
+*discoverability* (the optimization's access to the structure), not to any
+quantity that reads off the interaction type. Where both structures are
+recovered equally well, the summaries are equivalent, exactly as the
+first reading would predict for those cells. The third reading's condition
+(synergistic recovery poor) is reached at n = 5000 in both arms. The
+instrument-level findings follow.
+
+**Finding 1 — equal-TC regimes are not behaviorally equivalent, and the
+trace is discoverability.** At n = 5000 (main arm; population TC 0.500
+bits for both generators), the redundant generator's top-TC factor
+captures 0.42–0.50 bits (per d) while the synergistic generator's captures
+0.02–0.11 bits — from fits identical in procedure, capacity, and target.
+The paired generator differences (§E3.8, commitment 1) are outside the
+±0.05-bit equivalence margin in **11 of 12 main-arm cells**; the one
+inside (d = 3, n = 500: difference 0.011 bits, 95% CI [−0.021, +0.042]) is
+exactly the cell where both structures are recovered perfectly (top-d F1
+= 1.0 on both sides): **where the fit succeeds equally, its summaries are
+equivalent; where they differ, it is performance, not type reading.** In
+the sensitivity arm the differences are 0.43–0.50 bits at every cell —
+none inside the margin (redundancy's mechanism-matched latent succeeds
+everywhere; parity's is structurally excluded by capacity, §E3.5).
+
+**Finding 2 — the sensitivity arm isolates the mechanism-capacity match.**
+With dim_hidden = 2 the redundant top factor captures ≈ 0.50 bits (the
+entire population TC) and recovers the group exactly at every cell
+(top-d F1 = 1.0, zero nuisance false positives, support membership exact,
+Ω-on-discovered-support equal to the population value everywhere), while
+the binary latent carries 0.005–0.09 bits of the parity structure. This is
+the arm's designed statement (§E3.5): a mechanism-matched latent recovers
+the redundant structure exactly at both sample sizes.
+
+**Finding 3 — at n = 500 with high capacity, fitted factors consume
+finite-sample nuisance dependence (a capacity-remnant result).** With 25–30
+nuisance columns, sample-level fluctuations form a large spurious
+dependence pool at n = 500, and a sufficiently large latent consumes it:
+main-arm top-factor TC rises to 0.71 / 1.45 bits (redundant, d = 4 / 5)
+and 0.54 / 1.06 bits (parity, d = 4 / 5) — *above* the group's 0.5-bit
+population TC — with 14–18-column supports, nuisance false-positive
+proportions of 0.22–0.7, and degraded top-d F1 (0.82 / 0.69 redundant;
+0.80 / 0.16 parity). Every n = 5000 cell of the same arm is clean
+(redundant top-d F1 = 1.0, 1.0, 0.94; supports match the group). The
+interpretive reading therefore rests on the n = 5000 cells; the n = 500
+main-arm rows report the fit's robustness to spurious structure at small
+sample with large capacity, a separate capacity-remnant finding.
+
+**Finding 4 — the external signed measure is well estimated from samples
+everywhere.** Ground-truth-side Ω (plug-in, and Miller-Madow) on the true
+group agrees with the exact population values at every cell in both arms:
+within ≈ 0.01 bits at n = 5000 and ≤ 0.04 bits at n = 500 (largest plug-in
+gap: redundant d = 5, n = 500, 0.126 vs population 0.166), including the
+exact −(d − 2) · TC parity values. The estimator is not the bottleneck:
+the signed diagnostic is available whenever the group is known.
+
+**Finding 5 — the two-stage Ω instrument works exactly where recovery
+works, and fails loudly exactly where it does not (the designed
+end-to-end signal).** Where the top factor's discovered support matches
+the true group — every main-arm and sensitivity-arm redundant cell at
+n = 5000, all sensitivity-arm redundant cells, parity d = 3 n = 500 —
+Ω measured on exactly those columns of the fresh characterization sample
+**equals the population Ω** (e.g. +0.133 vs +0.133; −0.501 vs −0.500).
+Where recovery fails — parity at n = 5000 (support-match rates 0.09–0.25)
+main arm and 0.00–0.09 in the sensitivity arm — Ω-on-discovered-support
+**collapses to ≈ 0** (−0.03 to −0.12) while Ω-on-true-group remains at the
+population value (−0.50 to −1.50). The end-to-end procedure's quality,
+including its failures, is exactly the measurable quantity §E3.7 set out.
+
+**Finding 6 — the parity failure is optimization-mediated.** At n = 5000
+the parity fits in both arms converge EARLY into trivial solutions
+(top-factor TC ≈ 0 at converged EM; converged fractions 0.34–0.94 across
+d) — the trivial fixed point is an attractor precisely where the
+structure is hardest to find; redundant fits at the same settings do not
+collapse (top TC 0.42–0.50 bits). At n = 500 the runs exhaust the 200 EM
+iterations without convergence and the group is found at d = 3 (both
+generators) and d = 4 (F1 0.81–0.82), degrading at d = 5.
+
+**Finding 7 — §E3.5 contingency (capability diagnostic): the parity
+failure is optimization, not expressiveness.** On the parity group block
+alone, one latent factor, both initializations at the same 2^d-state
+cardinality (8 replicates per cell; the Experiment 2 pattern of §E3.5,
+flagged `uses_ground_truth_init = True` and excluded from recovery
+summaries): the **atom-seeded init reaches the analytic population TC at
+every cell** — 0.498–0.522 bits per replicate against the exactly-0.500
+analytic value, SE ≤ 0.017 — so the model family *represents* the parity
+structure at this cardinality. The **default EM init at the same
+cardinality** reaches the (global) optimum at n = 500 — 0.45–0.60 bits,
+converging to the seeded fit's value (agreement to 4–6 decimals where the
+optimum is sharp) — but **collapses at n = 5000**: 0.0000 bits in every
+replicate at d = 3 and d = 4, one replicate of eight finding the
+structure at d = 5 (mean 0.066 ± 0.188). This localizes the grid's parity
+failure (Findings 1 and 6) to EM's basin structure from the default
+initialization at larger n — an optimization failure, not an
+expressiveness failure — and independently reproduces the n-regime
+contrast (the group is found at n = 500, missed at n = 5000) in a minimal
+setting with no nuisance columns at all.
+
+**Scoped conclusions (§E3.8, commitment 2).** Within the summaries this
+pipeline reports (explained factor TC, fit-side recovery metrics,
+discovered-support Ω):
+
+- The fit's practical behavior on equal-TC redundancy-dominated and
+  synergy-dominated regimes is **not equivalent** — differences in
+  top-factor TC are far outside the pre-specified margin in 17 of 18
+  cells across the two arms — but the difference is a *discoverability*
+  trace, not a type reading: it tracks whether the optimization finds the
+  structure (mechanism-capacity match, §E3.5 arms; EM basins, Finding 6),
+  not a feature of fitted TC that could be interpreted as type.
+- Consequently, in operation, a fitted run **cannot distinguish "little
+  dependence" from "synergy-like dependence missed"** from its TC-side
+  summaries alone: both present as low top-factor TC at equal population
+  dependence (Finding 1; the informative failure of Finding 5).
+- Type characterization therefore requires the second or third instrument
+  of §E3.1 — an external signed measure where the joint is tractable (Ω:
+  accurate at every sample size, Finding 4) or a behavioral probe where it
+  is not — and recovery quality is not a safe proxy for "the structure
+  understood": recovered supports carry Ω forward *only when found*
+  (Finding 5). This is the empirical support for the identify-then-
+  intervene architecture of §E3.9, in the form the second §E3.8 outcome
+  licenses.
