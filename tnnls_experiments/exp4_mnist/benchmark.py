@@ -42,8 +42,8 @@ from ..common.store import ResultStore
 from .classifier import MLP, LAYER_DIMS
 from .data import load_splits
 from .interventions import (
-    accuracy_metrics, classwise_shift_matrix, effect_metrics,
-    predict_proba, random_control_probability,
+    accuracy_metrics, classwise_mean_probs, classwise_shift_matrix,
+    effect_metrics, predict_proba, random_control_probability,
     substantial_class_concentrated)
 
 EXPERIMENT = "mnist"
@@ -144,15 +144,25 @@ def standardize_with_flags(M: np.ndarray, var_floor: float = VAR_FLOOR):
     return Ms, valid, ~valid
 
 
-def fit_and_rank(H_std, L_std, n_factors, seed, n_retained=N_RETAINED):
-    """Fit Linear CorEx on [H | L] (or H alone); rank by TC; extract MIs."""
-    V = np.hstack([H_std, L_std]) if L_std is not None else H_std
+def fit_and_rank(H_std, L_std, n_factors, seed, n_retained=N_RETAINED,
+                 valid_h=None):
+    """Fit Linear CorEx on [H | L] (or H alone); rank by TC; extract MIs.
+
+    Columns flagged invalid (near-zero variance) are EXCLUDED from the fit
+    per spec; their MI entries are zero in the returned full-width arrays.
+    """
+    valid = np.ones(H_std.shape[1], dtype=bool) if valid_h is None else valid_h
+    v_idx = np.flatnonzero(valid)
+    H_fit = H_std[:, v_idx]
+    V = np.hstack([H_fit, L_std]) if L_std is not None else H_fit
     fit = corex.fit_linear_corex(V, n_factors, seed=seed)
     order = np.argsort(-fit.tcs)[:n_retained]
     n_h = H_std.shape[1]
     mis = fit.association_scores()
-    hidden_mis = mis[:, :n_h]
-    logit_mis = mis[:, n_h:] if L_std is not None else None
+    # map fit-side columns back to full-width hidden indices
+    hidden_mis = np.zeros((mis.shape[0], n_h))
+    hidden_mis[:, v_idx] = mis[:, :len(v_idx)]
+    logit_mis = mis[:, len(v_idx):] if L_std is not None else None
     dominant = (np.argmax(logit_mis, axis=1).astype(int) if logit_mis is not None
                 else np.full(mis.shape[0], -1, dtype=int))
     gaps = []
@@ -162,6 +172,38 @@ def fit_and_rank(H_std, L_std, n_factors, seed, n_retained=N_RETAINED):
                     if len(row) >= 2 else float("nan"))
     return {"fit": fit, "order": order, "hidden_mis": hidden_mis,
             "logit_mis": logit_mis, "dominant": dominant, "gaps": gaps}
+
+
+def posthoc_logit_mi(fit, H_fit: np.ndarray,
+                     L_std: np.ndarray) -> tuple[np.ndarray, np.ndarray, list]:
+    """Post-hoc factor-to-logit association for hidden-only fits (spec:
+    'associate each factor with logits by estimating I(Z_j; L_c) on the
+    discovery observations').
+
+    Factor scores are the linear latents Z = transform(H) of the fitted
+    model on the same standardized discovery sample used for the fit; MI is
+    the Gaussian estimate -0.5*log(1 - rho^2), the same estimator family as
+    LinearCorex's internal association scores. Dead (near-zero-variance)
+    factors or logits contribute MI 0; ties in argmax resolve to the lower
+    class index. Downstream rows carry logit_mi_source='post_hoc' so these
+    estimates are never confused with fit-side scores.
+    """
+    Z = fit.model.transform(H_fit)  # (n, m)
+    n, m = Z.shape
+    mis = np.zeros((m, L_std.shape[1]))
+    L_active = L_std.std(axis=0) > 1e-12
+    z_std = Z.std(axis=0)
+    for j in range(m):
+        if z_std[j] < 1e-12:
+            continue
+        zc = Z[:, j]
+        for c in np.flatnonzero(L_active):
+            rho = float(np.corrcoef(zc, L_std[:, c])[0, 1])
+            if np.isfinite(rho):
+                mis[j, c] = -0.5 * np.log(max(1.0 - rho * rho, 1e-12))
+    dominant = np.argmax(mis, axis=1).astype(int)
+    gaps = [float(np.sort(mis[j])[-1] - np.sort(mis[j])[-2]) for j in range(m)]
+    return mis, dominant, gaps
 
 
 # ---------------------------------------------------------------------------
@@ -241,7 +283,15 @@ def run_fit_stage(model_seed, splits, labels_cluster, model, device,
                                           cond_name)
                 L_for_fit = L_std if cond_name == "output_aware" else None
                 fr = fit_and_rank(H_std, L_for_fit, int(cfg["n_factors"]), s_fit,
-                                  int(cfg["n_retained"]))
+                                  int(cfg["n_retained"]), valid_h=valid_h)
+                if fr["logit_mis"] is None:
+                    # hidden-only: post-hoc factor-to-logit association (spec)
+                    v_idx = np.flatnonzero(valid_h)
+                    fr["logit_mis"], fr["dominant"], fr["gaps"] = \
+                        posthoc_logit_mi(fr["fit"], H_std[:, v_idx], L_std)
+                    logit_source = "post_hoc"
+                else:
+                    logit_source = "fit"
                 factor_rows = []
                 support_rows = []
                 for rank, j in enumerate(fr["order"]):
@@ -256,6 +306,7 @@ def run_fit_stage(model_seed, splits, labels_cluster, model, device,
                         "n_valid_hidden": int(valid_h.sum()),
                         "n_excluded_hidden": int((~valid_h).sum()),
                         "corex_runtime_s": fr["fit"].runtime_s,
+                        "logit_mi_source": logit_source,
                     }
                     if fr["logit_mis"] is not None:
                         lmis = fr["logit_mis"][j]
@@ -323,6 +374,10 @@ def _summarize_intervention(base, method, draw, p_abl, p_base, labels,
         **m,
         "accuracy_change": acc["accuracy_change"],
         "mean_ce_change": acc["mean_ce_change"],
+        "pbar_baseline_matrix": json.dumps(
+            np.round(classwise_mean_probs(p_base, labels), 6).tolist()),
+        "pbar_ablated_matrix": json.dumps(
+            np.round(classwise_mean_probs(p_abl, labels), 6).tolist()),
     }
     if dominant_logit is not None and dominant_logit >= 0:
         row["concordant"] = bool(m["c_minus"] == dominant_logit)
@@ -456,18 +511,19 @@ def run_ablation_stage(model_seed, splits, labels_cluster, model, device,
 # Probability-shift storage (large; per intervention 100 rows)
 # ---------------------------------------------------------------------------
 
-def write_probability_shifts(model_seed, store, cfg, max_rows_per_shard=50_000):
+def write_probability_shifts(model_seed, store, cfg):
     """Expand saved delta matrices into the tidy mnist_probability_shifts table.
 
     Reads ablation_summary shards (never reruns models) and writes one parquet
-    per model seed. Baseline/ablated per-image probabilities are not stored
-    individually (they are reconstructible from checkpoints); the mean
-    class-wise probabilities ARE the delta matrix (summarized there).
+    per model seed. Each row carries the class-mean baseline probability,
+    ablated probability, and signed change per (true class, output class) —
+    the spec-required contents of mnist_probability_shifts. Per-image
+    probabilities are not stored individually (they are reconstructible from
+    checkpoints); the class means are stored in full.
     """
     import pandas as pd
 
     rows = []
-    shards = store.completed_conditions()
     df = store.read_all("ablation_summary")
     if df.empty:
         return None
@@ -475,7 +531,8 @@ def write_probability_shifts(model_seed, store, cfg, max_rows_per_shard=50_000):
         if r["model_seed"] != model_seed:
             continue
         delta = np.array(json.loads(r["delta_matrix"]))
-        base = {y: [] for y in range(10)}
+        pbar_base = np.array(json.loads(r["pbar_baseline_matrix"]))
+        pbar_abl = np.array(json.loads(r["pbar_ablated_matrix"]))
         for y in range(10):
             for c in range(10):
                 rows.append({
@@ -486,7 +543,9 @@ def write_probability_shifts(model_seed, store, cfg, max_rows_per_shard=50_000):
                     "method": r["method"], "random_draw": r["random_draw"],
                     "threshold": r["threshold"],
                     "true_class": y, "output_class": c,
-                    "signed_shift": float(delta[y, c]),
+                    "baseline_probability": float(pbar_base[y, c]),
+                    "ablated_probability": float(pbar_abl[y, c]),
+                    "signed_change": float(delta[y, c]),
                 })
     out = pd.DataFrame(rows)
     path = config.RAW_DIR / EXPERIMENT / f"mnist_probability_shifts_seed{model_seed}.parquet"

@@ -8,10 +8,11 @@ import torch
 
 from tnnls_experiments.common import metrics, seeds
 from tnnls_experiments.exp4_mnist.benchmark import (
-    TrunkEvaluator, build_discovery_clusters, fit_and_rank,
+    TrunkEvaluator, build_discovery_clusters, fit_and_rank, posthoc_logit_mi,
     run_ablation_stage_for_factor, standardize_with_flags, univariate_support)
 from tnnls_experiments.exp4_mnist.classifier import MLP
-from tnnls_experiments.exp4_mnist.interventions import predict_proba
+from tnnls_experiments.exp4_mnist.interventions import (
+    classwise_mean_probs, classwise_shift_matrix, predict_proba)
 
 
 def _trained_tiny_model(n=2000, epochs=3, seed=0):
@@ -172,3 +173,65 @@ def test_smoke_benchmark_end_to_end(tmp_path, monkeypatch):
             ["model_seed", "cluster", "layer", "input_condition",
              "factor_index", "threshold"]):
         assert grp["support_size"].nunique() == 1
+
+
+def _latent_block_data(n=400, n_h=40, seed=1):
+    """Hidden coords driven by 3 latents; logit 3 correlates with latent 0."""
+    rng = np.random.default_rng(seed)
+    z = rng.standard_normal((n, 3))
+    cols = [z[:, j % 3] + 0.5 * rng.standard_normal(n) for j in range(n_h)]
+    H = np.stack(cols, axis=1)
+    L = np.stack([rng.standard_normal(n) for _ in range(10)], axis=1)
+    L[:, 3] = z[:, 0] + 0.2 * rng.standard_normal(n)
+    return H, L
+
+
+def test_posthoc_logit_mi_identifies_associated_logit():
+    # Hidden-only fit + post-hoc association: every factor built from latent
+    # 0-family tracks logit 3, and that logit dominates for those factors.
+    H, L = _latent_block_data()
+    H_std, valid, _ = standardize_with_flags(H)
+    L_std, _, _ = standardize_with_flags(L)
+    fr = fit_and_rank(H_std, None, n_factors=5, seed=7,
+                      n_retained=3, valid_h=valid)
+    assert fr["logit_mis"] is None and fr["dominant"][0] == -1  # pre-posthoc
+    v_idx = np.flatnonzero(valid)
+    mis, dominant, gaps = posthoc_logit_mi(fr["fit"], H_std[:, v_idx], L_std)
+    assert mis.shape == (5, 10) and len(gaps) == 5
+    for j in fr["order"]:
+        assert mis[j].min() >= 0.0 and gaps[j] >= -1e-9
+        if mis[j, 3] >= 0.05:  # substantive association, not sampling noise
+            assert dominant[j] == 3
+            assert mis[j, 3] == pytest.approx(mis[j].max())
+    assert (mis[:, 3] >= 0.05).sum() >= 1  # at least one z0-driven factor
+
+
+def test_fit_excludes_invalid_hidden_columns():
+    # Spec: near-zero-variance coordinates are excluded from CorEx fitting.
+    H, L = _latent_block_data()
+    H[:, 5] = 2.0  # constant column
+    H_std, valid, _ = standardize_with_flags(H)
+    L_std, _, _ = standardize_with_flags(L)
+    assert valid.sum() == H.shape[1] - 1 and not valid[5]
+    fr = fit_and_rank(H_std, L_std, n_factors=5, seed=3,
+                      n_retained=3, valid_h=valid)
+    assert all(np.isfinite(fr["fit"].tcs))
+    assert np.abs(fr["hidden_mis"][:, 5]).max() == 0.0  # zero, not fit
+    sups = metrics.nested_supports(fr["hidden_mis"][int(fr["order"][0])],
+                                   [0.6, 0.8], valid)
+    for s in sups:
+        assert 5 not in s.indices
+
+
+def test_pbar_matrices_consistent_with_delta():
+    # pbar_abl = pbar_base + delta, and baseline rows sum to 1.
+    rng = np.random.default_rng(9)
+    n = 2000
+    labels = rng.integers(0, 10, n)
+    p_base_np = rng.dirichlet(np.ones(10), size=n)
+    p_abl_np = rng.dirichlet(np.ones(10), size=n)  # same marginals family
+    delta = classwise_shift_matrix(p_abl_np, p_base_np, labels)
+    pb0 = classwise_mean_probs(p_base_np, labels)
+    pbA = classwise_mean_probs(p_abl_np, labels)
+    assert np.allclose(pbA, pb0 + delta, atol=1e-9)
+    assert np.allclose(pb0.sum(axis=1), 1.0, atol=1e-9)

@@ -61,6 +61,18 @@ def classwise_shift_matrix(
     return delta
 
 
+def classwise_mean_probs(probs: np.ndarray, labels: np.ndarray) -> np.ndarray:
+    """10x10 matrix of mean probabilities pbar_{y,c}: class-mean probability
+    vector for each true digit y. Complement of classwise_shift_matrix."""
+    out = np.zeros((N_CLASSES, N_CLASSES))
+    for y in range(N_CLASSES):
+        mask = labels == y
+        if mask.sum() == 0:
+            continue
+        out[y] = probs[mask].mean(axis=0)
+    return out
+
+
 def effect_metrics(delta: np.ndarray, n_per_class: np.ndarray) -> dict:
     """All aggregate effect/specificity metrics from the shift matrix."""
     T = 0.5 * np.abs(delta).sum(axis=1)              # T_y
