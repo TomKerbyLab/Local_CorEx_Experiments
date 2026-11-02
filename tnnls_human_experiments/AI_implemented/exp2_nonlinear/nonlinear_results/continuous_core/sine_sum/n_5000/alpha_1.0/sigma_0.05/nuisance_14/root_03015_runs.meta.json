@@ -1,0 +1,34 @@
+{
+  "condition": {
+    "generator": "sine_sum",
+    "n_per_region": 5000,
+    "alpha": 1.0,
+    "noise": 0.05,
+    "n_nuisance": 14,
+    "root_seed": 3015
+  },
+  "config": {
+    "repetitions": 16,
+    "estimators": [
+      "bio",
+      "linear"
+    ],
+    "corex_inputs": [
+      "with_routing"
+    ],
+    "native_gaussian_bio": true
+  },
+  "defaults": {
+    "n_factors": 4,
+    "phate_dimensions": 10,
+    "kmeans_n_init": 50,
+    "n_random_draws": 10,
+    "n_bins": 10,
+    "support_fraction": 0.8,
+    "bio_max_iter": 200,
+    "bio_dim_hidden": 4,
+    "bio_n_repeat": 5,
+    "linear_max_iter": 2000,
+    "native_gaussian_bio": true
+  }
+}

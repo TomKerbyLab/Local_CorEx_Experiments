@@ -1,0 +1,2 @@
+# Per-shard console logs are reproducible; condition CSVs + combined are the data.
+shard_logs/

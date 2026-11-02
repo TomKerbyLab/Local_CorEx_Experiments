@@ -1,0 +1,224 @@
+{"utc": "2026-10-28T21:33:47+00:00", "event": "run_start", "experiment": "discrete_core", "repetitions": 16, "shard": "26/32"}
+{"utc": "2026-10-28T21:33:47+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "12/32"}
+{"utc": "2026-10-28T21:33:47+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "4/32"}
+{"utc": "2026-10-28T21:33:47+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "6/32"}
+{"utc": "2026-10-28T21:33:47+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "11/32"}
+{"utc": "2026-10-28T21:33:47+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "17/32"}
+{"utc": "2026-10-28T21:33:48+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "19/32"}
+{"utc": "2026-10-28T21:33:48+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "13/32"}
+{"utc": "2026-10-28T21:33:48+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "1/32"}
+{"utc": "2026-10-28T21:33:48+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "16/32"}
+{"utc": "2026-10-28T21:33:48+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "31/32"}
+{"utc": "2026-10-28T21:33:48+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "3/32"}
+{"utc": "2026-10-28T21:33:48+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "7/32"}
+{"utc": "2026-10-28T21:33:48+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "8/32"}
+{"utc": "2026-10-28T21:33:48+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "25/32"}
+{"utc": "2026-10-28T21:33:48+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "23/32"}
+{"utc": "2026-10-28T21:33:48+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "0/32"}
+{"utc": "2026-10-28T21:33:48+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "22/32"}
+{"utc": "2026-10-28T21:33:48+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "20/32"}
+{"utc": "2026-10-28T21:33:48+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "2/32"}
+{"utc": "2026-10-28T21:33:48+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "18/32"}
+{"utc": "2026-10-28T21:33:48+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "29/32"}
+{"utc": "2026-10-28T21:33:48+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "14/32"}
+{"utc": "2026-10-28T21:33:48+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "21/32"}
+{"utc": "2026-10-28T21:33:48+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "26/32"}
+{"utc": "2026-10-28T21:33:48+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "24/32"}
+{"utc": "2026-10-28T21:33:48+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "28/32"}
+{"utc": "2026-10-28T21:33:48+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "15/32"}
+{"utc": "2026-10-28T21:33:48+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "9/32"}
+{"utc": "2026-10-28T21:33:48+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "30/32"}
+{"utc": "2026-10-28T21:33:48+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "10/32"}
+{"utc": "2026-10-28T21:33:48+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "27/32"}
+{"utc": "2026-10-28T21:33:51+00:00", "event": "run_start", "experiment": "discrete_core", "repetitions": 16, "shard": "4/32"}
+{"utc": "2026-10-28T21:33:51+00:00", "event": "run_start", "experiment": "discrete_core", "repetitions": 16, "shard": "30/32"}
+{"utc": "2026-10-28T21:33:51+00:00", "event": "run_start", "experiment": "discrete_core", "repetitions": 16, "shard": "1/32"}
+{"utc": "2026-10-28T21:33:52+00:00", "event": "run_start", "experiment": "discrete_core", "repetitions": 16, "shard": "24/32"}
+{"utc": "2026-10-28T21:33:52+00:00", "event": "run_start", "experiment": "discrete_core", "repetitions": 16, "shard": "9/32"}
+{"utc": "2026-10-28T21:33:52+00:00", "event": "run_start", "experiment": "discrete_core", "repetitions": 16, "shard": "25/32"}
+{"utc": "2026-10-28T21:33:52+00:00", "event": "run_start", "experiment": "discrete_core", "repetitions": 16, "shard": "0/32"}
+{"utc": "2026-10-28T21:33:52+00:00", "event": "run_start", "experiment": "discrete_core", "repetitions": 16, "shard": "29/32"}
+{"utc": "2026-10-28T21:33:52+00:00", "event": "run_start", "experiment": "discrete_core", "repetitions": 16, "shard": "5/32"}
+{"utc": "2026-10-28T21:33:52+00:00", "event": "run_start", "experiment": "discrete_core", "repetitions": 16, "shard": "14/32"}
+{"utc": "2026-10-28T21:33:52+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "5/32"}
+{"utc": "2026-10-28T21:33:52+00:00", "event": "run_start", "experiment": "discrete_core", "repetitions": 16, "shard": "10/32"}
+{"utc": "2026-10-28T21:33:52+00:00", "event": "run_start", "experiment": "discrete_core", "repetitions": 16, "shard": "6/32"}
+{"utc": "2026-10-28T21:33:52+00:00", "event": "run_start", "experiment": "discrete_core", "repetitions": 16, "shard": "12/32"}
+{"utc": "2026-10-28T21:33:52+00:00", "event": "run_start", "experiment": "discrete_core", "repetitions": 16, "shard": "23/32"}
+{"utc": "2026-10-28T21:33:52+00:00", "event": "run_start", "experiment": "discrete_core", "repetitions": 16, "shard": "13/32"}
+{"utc": "2026-10-28T21:33:52+00:00", "event": "run_start", "experiment": "discrete_core", "repetitions": 16, "shard": "19/32"}
+{"utc": "2026-10-28T21:33:52+00:00", "event": "run_start", "experiment": "discrete_core", "repetitions": 16, "shard": "31/32"}
+{"utc": "2026-10-28T21:33:52+00:00", "event": "run_start", "experiment": "discrete_core", "repetitions": 16, "shard": "11/32"}
+{"utc": "2026-10-28T21:33:52+00:00", "event": "run_start", "experiment": "discrete_core", "repetitions": 16, "shard": "20/32"}
+{"utc": "2026-10-28T21:33:52+00:00", "event": "run_start", "experiment": "discrete_core", "repetitions": 16, "shard": "17/32"}
+{"utc": "2026-10-28T21:33:52+00:00", "event": "run_start", "experiment": "discrete_core", "repetitions": 16, "shard": "22/32"}
+{"utc": "2026-10-28T21:33:52+00:00", "event": "run_start", "experiment": "discrete_core", "repetitions": 16, "shard": "2/32"}
+{"utc": "2026-10-28T21:33:52+00:00", "event": "run_start", "experiment": "discrete_core", "repetitions": 16, "shard": "18/32"}
+{"utc": "2026-10-28T21:33:53+00:00", "event": "run_start", "experiment": "discrete_core", "repetitions": 16, "shard": "8/32"}
+{"utc": "2026-10-28T21:33:53+00:00", "event": "run_start", "experiment": "discrete_core", "repetitions": 16, "shard": "28/32"}
+{"utc": "2026-10-28T21:33:53+00:00", "event": "run_start", "experiment": "discrete_core", "repetitions": 16, "shard": "16/32"}
+{"utc": "2026-10-28T21:33:53+00:00", "event": "run_start", "experiment": "discrete_core", "repetitions": 16, "shard": "27/32"}
+{"utc": "2026-10-28T21:33:53+00:00", "event": "run_start", "experiment": "discrete_core", "repetitions": 16, "shard": "7/32"}
+{"utc": "2026-10-28T21:33:53+00:00", "event": "run_start", "experiment": "discrete_core", "repetitions": 16, "shard": "21/32"}
+{"utc": "2026-10-28T21:33:53+00:00", "event": "run_start", "experiment": "discrete_core", "repetitions": 16, "shard": "15/32"}
+{"utc": "2026-10-28T21:33:53+00:00", "event": "run_start", "experiment": "discrete_core", "repetitions": 16, "shard": "3/32"}
+{"utc": "2026-10-29T21:10:31+00:00", "event": "run_end", "experiment": "discrete_core", "status": "completed", "conditions_written": 9, "conditions_skipped": 0, "elapsed_s": 84998.189}
+{"utc": "2026-10-29T21:14:05+00:00", "event": "run_end", "experiment": "discrete_core", "status": "completed", "conditions_written": 9, "conditions_skipped": 0, "elapsed_s": 85212.837}
+{"utc": "2026-10-29T21:27:19+00:00", "event": "run_end", "experiment": "discrete_core", "status": "completed", "conditions_written": 9, "conditions_skipped": 0, "elapsed_s": 86007.204}
+{"utc": "2026-10-29T21:32:39+00:00", "event": "run_end", "experiment": "discrete_core", "status": "completed", "conditions_written": 9, "conditions_skipped": 0, "elapsed_s": 86327.271}
+{"utc": "2026-10-29T21:35:46+00:00", "event": "run_end", "experiment": "discrete_core", "status": "completed", "conditions_written": 9, "conditions_skipped": 0, "elapsed_s": 86514.79}
+{"utc": "2026-10-29T21:36:08+00:00", "event": "run_end", "experiment": "discrete_core", "status": "completed", "conditions_written": 9, "conditions_skipped": 0, "elapsed_s": 86541.324}
+{"utc": "2026-10-29T21:43:17+00:00", "event": "run_end", "experiment": "discrete_core", "status": "completed", "conditions_written": 9, "conditions_skipped": 0, "elapsed_s": 86964.753}
+{"utc": "2026-10-29T21:45:12+00:00", "event": "run_end", "experiment": "discrete_core", "status": "completed", "conditions_written": 9, "conditions_skipped": 0, "elapsed_s": 87079.652}
+{"utc": "2026-10-29T21:47:48+00:00", "event": "run_end", "experiment": "discrete_core", "status": "completed", "conditions_written": 9, "conditions_skipped": 0, "elapsed_s": 87235.872}
+{"utc": "2026-10-29T21:50:27+00:00", "event": "run_end", "experiment": "discrete_core", "status": "completed", "conditions_written": 9, "conditions_skipped": 0, "elapsed_s": 87394.356}
+{"utc": "2026-10-29T22:10:45+00:00", "event": "run_end", "experiment": "discrete_core", "status": "completed", "conditions_written": 9, "conditions_skipped": 0, "elapsed_s": 88613.91}
+{"utc": "2026-10-29T22:20:19+00:00", "event": "run_end", "experiment": "discrete_core", "status": "completed", "conditions_written": 9, "conditions_skipped": 0, "elapsed_s": 89186.757}
+{"utc": "2026-10-29T22:26:51+00:00", "event": "run_end", "experiment": "discrete_core", "status": "completed", "conditions_written": 9, "conditions_skipped": 0, "elapsed_s": 89578.462}
+{"utc": "2026-10-29T22:31:03+00:00", "event": "run_end", "experiment": "discrete_core", "status": "completed", "conditions_written": 9, "conditions_skipped": 0, "elapsed_s": 89830.84}
+{"utc": "2026-10-29T22:34:32+00:00", "event": "run_end", "experiment": "discrete_core", "status": "completed", "conditions_written": 9, "conditions_skipped": 0, "elapsed_s": 90039.977}
+{"utc": "2026-10-29T22:35:34+00:00", "event": "run_end", "experiment": "discrete_core", "status": "completed", "conditions_written": 9, "conditions_skipped": 0, "elapsed_s": 90100.967}
+{"utc": "2026-10-30T00:38:21+00:00", "event": "run_end", "experiment": "discrete_core", "status": "completed", "conditions_written": 9, "conditions_skipped": 0, "elapsed_s": 97469.034}
+{"utc": "2026-10-30T00:57:20+00:00", "event": "run_end", "experiment": "discrete_core", "status": "completed", "conditions_written": 9, "conditions_skipped": 0, "elapsed_s": 98608.085}
+{"utc": "2026-10-30T00:59:10+00:00", "event": "run_end", "experiment": "discrete_core", "status": "completed", "conditions_written": 9, "conditions_skipped": 0, "elapsed_s": 98718.163}
+{"utc": "2026-10-30T01:06:50+00:00", "event": "run_end", "experiment": "discrete_core", "status": "completed", "conditions_written": 9, "conditions_skipped": 0, "elapsed_s": 99177.763}
+{"utc": "2026-10-30T01:08:06+00:00", "event": "run_end", "experiment": "discrete_core", "status": "completed", "conditions_written": 9, "conditions_skipped": 0, "elapsed_s": 99253.857}
+{"utc": "2026-10-30T01:18:48+00:00", "event": "run_end", "experiment": "discrete_core", "status": "completed", "conditions_written": 9, "conditions_skipped": 0, "elapsed_s": 99896.517}
+{"utc": "2026-10-30T01:19:03+00:00", "event": "run_end", "experiment": "discrete_core", "status": "completed", "conditions_written": 9, "conditions_skipped": 0, "elapsed_s": 99910.848}
+{"utc": "2026-10-30T01:21:15+00:00", "event": "run_end", "experiment": "discrete_core", "status": "completed", "conditions_written": 9, "conditions_skipped": 0, "elapsed_s": 100042.088}
+{"utc": "2026-10-30T01:23:34+00:00", "event": "run_end", "experiment": "discrete_core", "status": "completed", "conditions_written": 9, "conditions_skipped": 0, "elapsed_s": 100182.401}
+{"utc": "2026-10-30T01:25:02+00:00", "event": "run_end", "experiment": "discrete_core", "status": "completed", "conditions_written": 9, "conditions_skipped": 0, "elapsed_s": 100269.066}
+{"utc": "2026-10-30T01:27:52+00:00", "event": "run_end", "experiment": "discrete_core", "status": "completed", "conditions_written": 9, "conditions_skipped": 0, "elapsed_s": 100439.021}
+{"utc": "2026-10-30T01:33:06+00:00", "event": "run_end", "experiment": "discrete_core", "status": "completed", "conditions_written": 9, "conditions_skipped": 0, "elapsed_s": 100753.487}
+{"utc": "2026-10-30T01:33:55+00:00", "event": "run_end", "experiment": "discrete_core", "status": "completed", "conditions_written": 9, "conditions_skipped": 0, "elapsed_s": 100802.842}
+{"utc": "2026-10-30T01:36:25+00:00", "event": "run_end", "experiment": "discrete_core", "status": "completed", "conditions_written": 9, "conditions_skipped": 0, "elapsed_s": 100953.334}
+{"utc": "2026-10-30T01:44:23+00:00", "event": "run_end", "experiment": "discrete_core", "status": "completed", "conditions_written": 9, "conditions_skipped": 0, "elapsed_s": 101430.396}
+{"utc": "2026-10-30T02:04:18+00:00", "event": "run_end", "experiment": "discrete_core", "status": "completed", "conditions_written": 9, "conditions_skipped": 0, "elapsed_s": 102626.228}
+{"utc": "2026-10-30T04:11:23+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "58/64"}
+{"utc": "2026-10-30T04:11:25+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "38/64"}
+{"utc": "2026-10-30T04:11:25+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "32/64"}
+{"utc": "2026-10-30T04:11:25+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "34/64"}
+{"utc": "2026-10-30T04:11:25+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "5/64"}
+{"utc": "2026-10-30T04:11:25+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "14/64"}
+{"utc": "2026-10-30T04:11:25+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "1/64"}
+{"utc": "2026-10-30T04:11:25+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "9/64"}
+{"utc": "2026-10-30T04:11:25+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "3/64"}
+{"utc": "2026-10-30T04:11:26+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "27/64"}
+{"utc": "2026-10-30T04:11:26+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "24/64"}
+{"utc": "2026-10-30T04:11:26+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "31/64"}
+{"utc": "2026-10-30T04:11:26+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "19/64"}
+{"utc": "2026-10-30T04:11:26+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "54/64"}
+{"utc": "2026-10-30T04:11:26+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "22/64"}
+{"utc": "2026-10-30T04:11:26+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "62/64"}
+{"utc": "2026-10-30T04:11:26+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "46/64"}
+{"utc": "2026-10-30T04:11:26+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "40/64"}
+{"utc": "2026-10-30T04:11:26+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "48/64"}
+{"utc": "2026-10-30T04:11:26+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "39/64"}
+{"utc": "2026-10-30T04:11:26+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "57/64"}
+{"utc": "2026-10-30T04:11:26+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "12/64"}
+{"utc": "2026-10-30T04:11:26+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "61/64"}
+{"utc": "2026-10-30T04:11:27+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "49/64"}
+{"utc": "2026-10-30T04:11:27+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "11/64"}
+{"utc": "2026-10-30T04:11:27+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "37/64"}
+{"utc": "2026-10-30T04:11:27+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "26/64"}
+{"utc": "2026-10-30T04:11:27+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "17/64"}
+{"utc": "2026-10-30T04:11:27+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "16/64"}
+{"utc": "2026-10-30T04:11:27+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "35/64"}
+{"utc": "2026-10-30T04:11:28+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "2/64"}
+{"utc": "2026-10-30T04:11:28+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "28/64"}
+{"utc": "2026-10-30T04:11:28+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "63/64"}
+{"utc": "2026-10-30T04:11:28+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "8/64"}
+{"utc": "2026-10-30T04:11:28+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "59/64"}
+{"utc": "2026-10-30T04:11:28+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "21/64"}
+{"utc": "2026-10-30T04:11:28+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "20/64"}
+{"utc": "2026-10-30T04:11:28+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "15/64"}
+{"utc": "2026-10-30T04:11:28+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "10/64"}
+{"utc": "2026-10-30T04:11:28+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "60/64"}
+{"utc": "2026-10-30T04:11:28+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "45/64"}
+{"utc": "2026-10-30T04:11:28+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "50/64"}
+{"utc": "2026-10-30T04:11:28+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "7/64"}
+{"utc": "2026-10-30T04:11:28+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "0/64"}
+{"utc": "2026-10-30T04:11:28+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "30/64"}
+{"utc": "2026-10-30T04:11:28+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "44/64"}
+{"utc": "2026-10-30T04:11:28+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "43/64"}
+{"utc": "2026-10-30T04:11:28+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "25/64"}
+{"utc": "2026-10-30T04:11:28+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "55/64"}
+{"utc": "2026-10-30T04:11:28+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "6/64"}
+{"utc": "2026-10-30T04:11:28+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "36/64"}
+{"utc": "2026-10-30T04:11:28+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "13/64"}
+{"utc": "2026-10-30T04:11:28+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "18/64"}
+{"utc": "2026-10-30T04:11:28+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "4/64"}
+{"utc": "2026-10-30T04:11:28+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "42/64"}
+{"utc": "2026-10-30T04:11:28+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "47/64"}
+{"utc": "2026-10-30T04:11:28+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "53/64"}
+{"utc": "2026-10-30T04:11:28+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "23/64"}
+{"utc": "2026-10-30T04:11:28+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "41/64"}
+{"utc": "2026-10-30T04:11:28+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "52/64"}
+{"utc": "2026-10-30T04:11:28+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "56/64"}
+{"utc": "2026-10-30T04:11:28+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "33/64"}
+{"utc": "2026-10-30T04:11:28+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "29/64"}
+{"utc": "2026-10-30T04:11:28+00:00", "event": "run_start", "experiment": "continuous_core", "repetitions": 16, "shard": "51/64"}
+{"utc": "2026-10-31T02:00:32+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 2, "conditions_skipped": 2, "elapsed_s": 78545.936}
+{"utc": "2026-10-31T02:07:41+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 2, "conditions_skipped": 2, "elapsed_s": 78974.889}
+{"utc": "2026-10-31T02:13:27+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 2, "conditions_skipped": 2, "elapsed_s": 79319.594}
+{"utc": "2026-10-31T02:19:41+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 2, "conditions_skipped": 2, "elapsed_s": 79698.022}
+{"utc": "2026-10-31T03:29:07+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 2, "elapsed_s": 83858.766}
+{"utc": "2026-10-31T03:30:21+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 2, "elapsed_s": 83935.582}
+{"utc": "2026-10-31T03:40:02+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 1, "elapsed_s": 84516.316}
+{"utc": "2026-10-31T03:48:32+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 1, "elapsed_s": 85023.524}
+{"utc": "2026-10-31T03:57:13+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 1, "elapsed_s": 85547.691}
+{"utc": "2026-10-31T03:57:17+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 2, "elapsed_s": 85551.216}
+{"utc": "2026-10-31T04:06:07+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 1, "elapsed_s": 86078.447}
+{"utc": "2026-10-31T04:10:08+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 1, "elapsed_s": 86320.681}
+{"utc": "2026-10-31T04:12:48+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 2, "elapsed_s": 86480.123}
+{"utc": "2026-10-31T04:21:51+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 1, "elapsed_s": 87022.861}
+{"utc": "2026-10-31T04:53:22+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 4, "conditions_skipped": 1, "elapsed_s": 88914.886}
+{"utc": "2026-10-31T05:43:44+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 4, "conditions_skipped": 1, "elapsed_s": 91938.568}
+{"utc": "2026-10-31T17:07:56+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 2, "elapsed_s": 132990.803}
+{"utc": "2026-10-31T17:15:04+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 2, "elapsed_s": 133415.815}
+{"utc": "2026-10-31T17:28:38+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 1, "elapsed_s": 134231.465}
+{"utc": "2026-10-31T17:28:49+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 1, "elapsed_s": 134240.971}
+{"utc": "2026-10-31T17:32:30+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 1, "elapsed_s": 134461.892}
+{"utc": "2026-10-31T17:33:07+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 2, "elapsed_s": 134499.38}
+{"utc": "2026-10-31T17:39:04+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 2, "elapsed_s": 134855.47}
+{"utc": "2026-10-31T17:47:40+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 1, "elapsed_s": 135373.47}
+{"utc": "2026-10-31T17:53:56+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 2, "elapsed_s": 135748.198}
+{"utc": "2026-10-31T17:58:56+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 1, "elapsed_s": 136048.289}
+{"utc": "2026-10-31T18:00:44+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 2, "elapsed_s": 136157.027}
+{"utc": "2026-10-31T18:01:35+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 1, "elapsed_s": 136206.207}
+{"utc": "2026-10-31T18:05:06+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 1, "elapsed_s": 136418.476}
+{"utc": "2026-10-31T18:05:19+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 2, "elapsed_s": 136431.666}
+{"utc": "2026-10-31T18:07:18+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 1, "elapsed_s": 136549.996}
+{"utc": "2026-10-31T18:08:57+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 2, "elapsed_s": 136649.115}
+{"utc": "2026-10-31T18:09:59+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 2, "elapsed_s": 136713.785}
+{"utc": "2026-10-31T18:10:16+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 1, "elapsed_s": 136730.147}
+{"utc": "2026-10-31T18:11:30+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 2, "elapsed_s": 136803.819}
+{"utc": "2026-10-31T18:13:30+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 1, "elapsed_s": 136922.601}
+{"utc": "2026-10-31T18:13:56+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 1, "elapsed_s": 136951.114}
+{"utc": "2026-10-31T18:14:06+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 2, "elapsed_s": 136959.901}
+{"utc": "2026-10-31T18:14:19+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 1, "elapsed_s": 136971.645}
+{"utc": "2026-10-31T18:17:05+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 1, "elapsed_s": 137138.618}
+{"utc": "2026-10-31T18:23:30+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 1, "elapsed_s": 137522.178}
+{"utc": "2026-10-31T18:24:30+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 2, "elapsed_s": 137583.085}
+{"utc": "2026-10-31T18:25:29+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 2, "elapsed_s": 137641.732}
+{"utc": "2026-10-31T18:27:05+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 2, "elapsed_s": 137736.208}
+{"utc": "2026-10-31T18:36:44+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 1, "elapsed_s": 138317.804}
+{"utc": "2026-10-31T18:37:13+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 3, "conditions_skipped": 1, "elapsed_s": 138346.906}
+{"utc": "2026-10-31T18:43:19+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 4, "conditions_skipped": 0, "elapsed_s": 138711.248}
+{"utc": "2026-10-31T19:00:45+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 4, "conditions_skipped": 0, "elapsed_s": 139759.106}
+{"utc": "2026-10-31T19:04:36+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 4, "conditions_skipped": 0, "elapsed_s": 139988.213}
+{"utc": "2026-10-31T19:07:58+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 4, "conditions_skipped": 1, "elapsed_s": 140192.4}
+{"utc": "2026-10-31T19:13:31+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 4, "conditions_skipped": 1, "elapsed_s": 140523.933}
+{"utc": "2026-10-31T19:18:17+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 4, "conditions_skipped": 1, "elapsed_s": 140809.53}
+{"utc": "2026-10-31T19:21:31+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 4, "conditions_skipped": 1, "elapsed_s": 141003.08}
+{"utc": "2026-10-31T19:25:38+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 4, "conditions_skipped": 1, "elapsed_s": 141250.623}
+{"utc": "2026-10-31T19:27:40+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 4, "conditions_skipped": 1, "elapsed_s": 141371.837}
+{"utc": "2026-10-31T19:28:07+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 4, "conditions_skipped": 1, "elapsed_s": 141399.935}
+{"utc": "2026-10-31T19:29:57+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 4, "conditions_skipped": 1, "elapsed_s": 141511.903}
+{"utc": "2026-10-31T19:31:40+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 4, "conditions_skipped": 0, "elapsed_s": 141614.049}
+{"utc": "2026-10-31T19:31:54+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 4, "conditions_skipped": 1, "elapsed_s": 141628.078}
+{"utc": "2026-10-31T19:31:57+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 4, "conditions_skipped": 1, "elapsed_s": 141631.789}
+{"utc": "2026-10-31T19:38:13+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 4, "conditions_skipped": 0, "elapsed_s": 142004.63}
+{"utc": "2026-10-31T19:46:33+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 4, "conditions_skipped": 0, "elapsed_s": 142506.378}
+{"utc": "2026-10-31T19:50:53+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 4, "conditions_skipped": 1, "elapsed_s": 142764.975}
+{"utc": "2026-10-31T19:55:48+00:00", "event": "run_end", "experiment": "continuous_core", "status": "completed", "conditions_written": 4, "conditions_skipped": 1, "elapsed_s": 143060.398}
