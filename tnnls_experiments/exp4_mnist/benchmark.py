@@ -43,8 +43,8 @@ from .classifier import MLP, LAYER_DIMS
 from .data import load_splits
 from .interventions import (
     accuracy_metrics, classwise_mean_probs, classwise_shift_matrix,
-    effect_metrics, predict_proba, random_control_probability,
-    substantial_class_concentrated)
+    effect_metrics, individual_effect_metrics, predict_proba,
+    random_control_probability, substantial_class_concentrated)
 
 EXPERIMENT = "mnist"
 logger = logging.getLogger(f"tnnls.{EXPERIMENT}")
@@ -61,6 +61,7 @@ HIDDEN_ONLY_FRACTION = 0.80
 MODEL_SEEDS = (5100, 5101, 5102, 5103, 5104)
 LAYERS = (1, 2, 3)
 VAR_FLOOR = 1e-12
+NATS_TO_BITS = 1.0 / np.log(2.0)  # Linear CorEx reports TC/MI in nats
 
 INPUT_CONDITIONS = ("output_aware", "hidden_only")
 
@@ -144,6 +145,54 @@ def standardize_with_flags(M: np.ndarray, var_floor: float = VAR_FLOOR):
     return Ms, valid, ~valid
 
 
+def center_logits(logits: np.ndarray) -> np.ndarray:
+    """Row-center the logit block: L_c - (1/10) sum_u L_u per image.
+
+    Softmax is invariant to adding an image-dependent constant to every
+    logit, so this common component is behaviorally irrelevant to the
+    model, yet raw-logit associations can shift with it. Removed before
+    standardization for every discovery-side use of the logits (fit input,
+    post-hoc associations, univariate control). Note: standardizing each
+    column afterwards scales the residual (differential) part by that
+    column's spread, which is intended.
+    """
+    return logits - logits.mean(axis=1, keepdims=True)
+
+
+def effective_n_units(scores: np.ndarray, valid: np.ndarray) -> float:
+    """Effective number of units carrying the factor's association: exp of
+    the entropy of the normalized positive hidden-unit MI weights (invalid
+    coordinates carry zero weight). One dominant unit -> ~1; k equal units
+    -> ~k. Distinguishes broad association from dominant-unit-plus-weak-tail.
+    """
+    w = np.clip(np.asarray(scores, dtype=float), 0.0, None).copy()
+    w[~valid] = 0.0
+    tot = w.sum()
+    if tot <= 0:
+        return float("nan")
+    p = w / tot
+    p = p[p > 0]
+    return float(np.exp(-(p * np.log(p)).sum()))
+
+
+def tc_rank_order(tcs: np.ndarray, n_retained: int, tie_seed: int) -> np.ndarray:
+    """Top-n_retained among factors with positive explained TC.
+
+    Ties in TC are broken by the seeded permutation (the program's neutral
+    tie rule), never by column layout. Conditions with no positive-TC
+    factor yield an empty order: no interventions are defined there, and
+    the shortfall shows up in coverage reporting, never as silent padding
+    with noise factors.
+    """
+    rng = np.random.default_rng(int(tie_seed))
+    pos = np.flatnonzero(np.asarray(tcs, dtype=float) > 0)
+    if len(pos) == 0:
+        return np.array([], dtype=int)
+    perm = rng.permutation(len(pos))
+    tpos = np.asarray(tcs, dtype=float)[pos[perm]]
+    return pos[perm][np.argsort(-tpos, kind="stable")][:n_retained]
+
+
 def fit_and_rank(H_std, L_std, n_factors, seed, n_retained=N_RETAINED,
                  valid_h=None):
     """Fit Linear CorEx on [H | L] (or H alone); rank by TC; extract MIs.
@@ -156,7 +205,7 @@ def fit_and_rank(H_std, L_std, n_factors, seed, n_retained=N_RETAINED,
     H_fit = H_std[:, v_idx]
     V = np.hstack([H_fit, L_std]) if L_std is not None else H_fit
     fit = corex.fit_linear_corex(V, n_factors, seed=seed)
-    order = np.argsort(-fit.tcs)[:n_retained]
+    order = tc_rank_order(fit.tcs, n_retained, seeds.derive_seed(seed, "tc_order"))
     n_h = H_std.shape[1]
     mis = fit.association_scores()
     # map fit-side columns back to full-width hidden indices
@@ -226,6 +275,13 @@ class TrunkEvaluator:
         self.baseline_logits = logits
         self.baseline_probs = torch.softmax(logits, dim=1).cpu().numpy()
         self.test_x = x_test
+        # mean |activation| per unit on the test set, per layer: the
+        # activity-removal magnitude baseline for the support diagnostics
+        self.unit_magnitude = {l: np.abs(hi.cpu().numpy()).mean(axis=0)
+                               for l, hi in self.h.items()}
+        self.mean_removed_activation = lambda layer, support: (
+            float(self.unit_magnitude[layer][list(support)].mean())
+            if len(support) else 0.0)
 
     @torch.no_grad()
     def ablated_probs(self, layer: int, support: list[int]) -> np.ndarray:
@@ -274,7 +330,7 @@ def run_fit_stage(model_seed, splits, labels_cluster, model, device,
         for layer in cfg["layers"]:
             H = {1: h1, 2: h2, 3: h3}[layer]
             H_std, valid_h, excluded_h = standardize_with_flags(H)
-            L_std, _, _ = standardize_with_flags(logits)
+            L_std, _, _ = standardize_with_flags(center_logits(logits))
             for cond_name in cfg["input_conditions"]:
                 fcond = factor_condition(model_seed, cluster, layer, cond_name)
                 if store.is_done(fcond, ("factors", "supports")):
@@ -295,11 +351,12 @@ def run_fit_stage(model_seed, splits, labels_cluster, model, device,
                 factor_rows = []
                 support_rows = []
                 for rank, j in enumerate(fr["order"]):
+                    hmis = fr["hidden_mis"][j]
                     row = {
                         "model_seed": model_seed, "cluster": cluster,
                         "layer": layer, "input_condition": cond_name,
                         "factor_index": int(j), "factor_rank": rank,
-                        "factor_tc": float(fr["fit"].tcs[j]),
+                        "factor_tc": float(fr["fit"].tcs[j]) / NATS_TO_BITS,  # bits
                         "corex_seed": s_fit,
                         "corex_converged": fr["fit"].converged,
                         "n_negative_mi": fr["fit"].n_negative_mi,
@@ -307,18 +364,36 @@ def run_fit_stage(model_seed, splits, labels_cluster, model, device,
                         "n_excluded_hidden": int((~valid_h).sum()),
                         "corex_runtime_s": fr["fit"].runtime_s,
                         "logit_mi_source": logit_source,
+                        "effective_n_units": effective_n_units(hmis, valid_h),
+                        # full-width hidden-MI vector (zeros at excluded
+                        # coordinates) for the TC/distributedness analyses
+                        "hidden_mi_vector": json.dumps(
+                            np.round(hmis, 6).tolist()),
                     }
                     if fr["logit_mis"] is not None:
                         lmis = fr["logit_mis"][j]
                         row["dominant_logit"] = int(fr["dominant"][j])
                         row["logit_mi_gap"] = float(fr["gaps"][j])
+                        # association scores are recorded in bits at this
+                        # boundary (fit-side and post-hoc alike; Linear CorEx
+                        # reports nats — the Experiment 3 unit lesson)
                         for c in range(10):
-                            row[f"logit_mi_{c}"] = float(lmis[c])
+                            row[f"logit_mi_{c}"] = float(lmis[c]) / NATS_TO_BITS
                     factor_rows.append(row)
-                    # hidden-unit supports (nested) from hidden MI only
-                    hmis = fr["hidden_mis"][j]
-                    sups = metrics.nested_supports(
-                        hmis, list(cfg["support_thresholds"]), valid_h)
+                    # hidden-unit supports (nested) from hidden MI only;
+                    # MI-score ties broken by seeded permutation (neutral
+                    # tie rule), mapped back to original unit indices
+                    s_tie = seeds.derive_seed(s_fit, "support_ties")
+                    perm = np.random.default_rng(s_tie).permutation(
+                        H_std.shape[1])
+                    sups_p = metrics.nested_supports(
+                        hmis[perm], list(cfg["support_thresholds"]),
+                        valid_h[perm])
+                    sups = []
+                    for sup in sups_p:
+                        sup.indices = [int(perm[i]) for i in sup.indices]
+                        sup.scores = [float(hmis[i]) for i in sup.indices]
+                        sups.append(sup)
                     for q, sup in zip(cfg["support_thresholds"], sups):
                         for rank_in_sup, (unit, score) in enumerate(
                                 zip(sup.indices, sup.scores)):
@@ -329,7 +404,7 @@ def run_fit_stage(model_seed, splits, labels_cluster, model, device,
                                 "threshold": float(q),
                                 "mi_rank": rank_in_sup,
                                 "hidden_unit": int(unit),
-                                "mi_score": float(score),
+                                "mi_score": float(score) / NATS_TO_BITS,
                                 "achieved_fraction": sup.achieved_fraction,
                                 "support_size": sup.size,
                                 "support_density": sup.density,
@@ -362,11 +437,12 @@ def univariate_support(H: np.ndarray, logit_col: np.ndarray, size: int,
 
 
 def _summarize_intervention(base, method, draw, p_abl, p_base, labels,
-                            dominant_logit):
+                            dominant_logit, removed_act_mag=None):
     delta = classwise_shift_matrix(p_abl, p_base, labels)
     n_per_class = np.bincount(labels, minlength=10).astype(float)
     m = effect_metrics(delta, n_per_class)
     acc = accuracy_metrics(p_abl, p_base, labels)
+    indiv = individual_effect_metrics(p_abl, p_base, labels)
     row = {
         **base, "method": method, "random_draw": draw,
         "substantial_class_concentrated": substantial_class_concentrated(
@@ -374,6 +450,16 @@ def _summarize_intervention(base, method, draw, p_abl, p_base, labels,
         **m,
         "accuracy_change": acc["accuracy_change"],
         "mean_ce_change": acc["mean_ce_change"],
+        # cancel-free individual-effect companions (U_y >= T_y)
+        "U_max": indiv["U_max"], "U_weighted": indiv["U_weighted"],
+        "y_U_star": indiv["y_U_star"],
+        "U_per_class": json.dumps(np.round(indiv["U_per_class"], 6).tolist()),
+        "flip_rate": indiv["flip_rate"],
+        "flip_rate_per_class": json.dumps(
+            np.round(indiv["flip_rate_per_class"], 6).tolist()),
+        # removed-activation magnitude diagnostic (size matching controls
+        # unit count, not removed activation)
+        "mean_removed_activation_mag": removed_act_mag,
         "pbar_baseline_matrix": json.dumps(
             np.round(classwise_mean_probs(p_base, labels), 6).tolist()),
         "pbar_ablated_matrix": json.dumps(
@@ -383,9 +469,18 @@ def _summarize_intervention(base, method, draw, p_abl, p_base, labels,
         row["concordant"] = bool(m["c_minus"] == dominant_logit)
         order = np.argsort(delta[m["y_star"]], kind="stable")
         row["dominant_logit_rank"] = int(np.where(order == dominant_logit)[0][0])
+        # MI association is sign-blind (rho^2) and masking is not a directed
+        # latent change: also record the absolute shift at the associated
+        # class; a low reduction-concordance rate is not by itself evidence
+        # against a factor's interpretability
+        row["associated_class_shift"] = float(delta[m["y_star"], dominant_logit])
+        row["associated_class_abs_shift"] = float(
+            abs(row["associated_class_shift"]))
     else:
         row["concordant"] = None
         row["dominant_logit_rank"] = None
+        row["associated_class_shift"] = None
+        row["associated_class_abs_shift"] = None
     row["delta_matrix"] = json.dumps(np.round(delta, 6).tolist())
     return row
 
@@ -428,7 +523,8 @@ def run_ablation_stage_for_factor(
         p_abl = trunk.ablated_probs(layer, sup)
         row_lc = _summarize_intervention(
             base_int, "local_corex", 0, p_abl, trunk.baseline_probs,
-            labels_test, dominant_logit)
+            labels_test, dominant_logit,
+            removed_act_mag=trunk.mean_removed_activation(layer, sup))
         rows.append(row_lc)
         # --- matched random supports --------------------------------------
         rand_T, rand_H = [], []
@@ -441,7 +537,8 @@ def run_ablation_stage_for_factor(
             p_abl = trunk.ablated_probs(layer, rand_sup)
             row_r = _summarize_intervention(
                 base_int, "random", draw, p_abl, trunk.baseline_probs,
-                labels_test, dominant_logit)
+                labels_test, dominant_logit,
+                removed_act_mag=trunk.mean_removed_activation(layer, rand_sup))
             rand_T.append(row_r["T_max"])
             rand_H.append(row_r["H_input"])
             rows.append(row_r)
@@ -457,7 +554,8 @@ def run_ablation_stage_for_factor(
             p_abl = trunk.ablated_probs(layer, uni)
             row_u = _summarize_intervention(
                 base_int, "univariate", 0, p_abl, trunk.baseline_probs,
-                labels_test, dominant_logit)
+                labels_test, dominant_logit,
+                removed_act_mag=trunk.mean_removed_activation(layer, uni))
             rows.append(row_u)
     store.write(acond, "ablation_summary", rows)
 
@@ -474,6 +572,8 @@ def run_ablation_stage(model_seed, splits, labels_cluster, model, device,
             continue
         xc = x_disc[torch.tensor(idx)]
         h1, h2, h3, logits_disc = extract_representations(model, xc, device)
+        # row-centered logits: softmax-relevant, behaviorally invariant part
+        logits_disc = center_logits(logits_disc)
         for layer in cfg["layers"]:
             H = {1: h1, 2: h2, 3: h3}[layer]
             H_std, valid_h, _ = standardize_with_flags(H)

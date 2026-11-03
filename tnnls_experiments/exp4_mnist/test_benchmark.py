@@ -8,11 +8,13 @@ import torch
 
 from tnnls_experiments.common import metrics, seeds
 from tnnls_experiments.exp4_mnist.benchmark import (
-    TrunkEvaluator, build_discovery_clusters, fit_and_rank, posthoc_logit_mi,
-    run_ablation_stage_for_factor, standardize_with_flags, univariate_support)
+    TrunkEvaluator, build_discovery_clusters, effective_n_units, center_logits,
+    fit_and_rank, posthoc_logit_mi, run_ablation_stage_for_factor,
+    standardize_with_flags, tc_rank_order, univariate_support)
 from tnnls_experiments.exp4_mnist.classifier import MLP
 from tnnls_experiments.exp4_mnist.interventions import (
-    classwise_mean_probs, classwise_shift_matrix, predict_proba)
+    classwise_mean_probs, classwise_shift_matrix, individual_effect_metrics,
+    predict_proba)
 
 
 def _trained_tiny_model(n=2000, epochs=3, seed=0):
@@ -235,3 +237,93 @@ def test_pbar_matrices_consistent_with_delta():
     pbA = classwise_mean_probs(p_abl_np, labels)
     assert np.allclose(pbA, pb0 + delta, atol=1e-9)
     assert np.allclose(pb0.sum(axis=1), 1.0, atol=1e-9)
+
+
+def test_centered_logits_remove_behaviorally_irrelevant_component():
+    # Softmax invariance: adding a per-image constant leaves predictions.
+    torch.manual_seed(0)
+    m = MLP(dropout_p=0.5).eval()
+    x = torch.rand(128, 784)
+    base = m(x)
+    c = torch.rand(len(x), 1)
+    with torch.no_grad():
+        shifted = torch.softmax(base + c, dim=1)
+    assert torch.allclose(shifted, torch.softmax(base, dim=1), atol=1e-6)
+    # Discovery association: raw logit correlation is polluted by the common
+    # mode; centering removes exactly it.
+    rng = np.random.default_rng(4)
+    n = 400
+    common = rng.standard_normal(n)
+    # H correlates ONLY with the common logit mode (behaviorally irrelevant
+    # under softmax) and with no differential component
+    H = np.stack([common + 0.3 * rng.standard_normal(n)
+                  for _ in range(5)], axis=1)
+    L = np.stack([common + 0.1 * rng.standard_normal(n)
+                  for _ in range(10)], axis=1)
+    corr_raw = np.corrcoef(H[:, 0], L[:, 3])[0, 1]
+    Lc = center_logits(L)  # centering removes the pure common mode
+    assert np.abs(Lc[:, 3]).std() < 0.15  # only the small residual remains
+    corr_cen = np.abs(np.corrcoef(H[:, 0], Lc[:, 3])[0, 1])
+    assert abs(corr_raw) > 0.5 and corr_cen < 0.2
+
+
+def test_individual_effect_metrics_bounds():
+    # U_y >= T_y (triangle inequality); flip rates in [0, 1]; equality case
+    # when every image shifts the same direction.
+    rng = np.random.default_rng(11)
+    n = 1000
+    labels = rng.integers(0, 10, n)
+    p0 = rng.dirichlet(np.ones(10), size=n)
+    pA = rng.dirichlet(np.ones(10), size=n)
+    delta = classwise_shift_matrix(pA, p0, labels)
+    T = 0.5 * np.abs(delta).sum(axis=1)
+    m = individual_effect_metrics(pA, p0, labels)
+    assert np.all(np.array(m["U_per_class"]) >= T - 1e-9)
+    assert 0.0 <= m["flip_rate"] <= 1.0
+    assert m["U_max"] == pytest.approx(max(m["U_per_class"]))
+    # same-direction case: U == T on the affected class
+    p0b = np.full((100, 10), 0.1)
+    pAb = p0b.copy()
+    pAb[:, 3] = 0.05
+    pAb[:, 7] = 0.15
+    labels_b = np.full(100, 4)
+    delta_b = classwise_shift_matrix(pAb, p0b, labels_b)
+    T_b = 0.5 * np.abs(delta_b[4]).sum()
+    mb = individual_effect_metrics(pAb, p0b, labels_b)
+    assert mb["U_per_class"][4] == pytest.approx(T_b, abs=1e-9)
+
+
+def test_tc_rank_order_positive_and_neutral():
+    # Nonpositive-TC factors are never retained; TC ties are broken by the
+    # seeded permutation, deterministically, not by column layout.
+    tcs = np.array([0.0, 0.5, 0.5, -1.0, 0.3, 0.2])
+    order = tc_rank_order(tcs, n_retained=5, tie_seed=42)
+    assert 0 not in order and 3 not in order
+    assert len(order) == 4  # only positive-TC factors
+    order2 = tc_rank_order(tcs, n_retained=5, tie_seed=42)
+    assert np.array_equal(order, order2)       # deterministic given seed
+    assert tcs[order[0]] == pytest.approx(0.5)  # strongest first
+    assert tc_rank_order(np.array([0.0, -0.1]), 5, 1).shape == (0,)
+
+
+def test_effective_n_units_concentrated_vs_uniform():
+    scores = np.zeros(50)
+    valid = np.ones(50, bool)
+    scores[7] = 3.0                      # single dominant unit -> ~1
+    assert effective_n_units(scores, valid) == pytest.approx(1.0, abs=1e-9)
+    scores = np.zeros(50)
+    scores[:10] = 2.0                    # 10 equal units -> ~10
+    assert effective_n_units(scores, valid) == pytest.approx(10.0, rel=1e-9)
+    assert np.isnan(effective_n_units(np.zeros(10), np.ones(10, bool)))
+
+
+def test_removed_activation_magnitude_diagnostic():
+    # The trunk caches per-unit mean |activation|; a large-|h| support has a
+    # larger removal magnitude than a random one of the same size.
+    model, xs, ys = _trained_tiny_model(n=2000, epochs=2)
+    trunk = TrunkEvaluator(model, xs[:500], device="cpu")
+    vals = trunk.unit_magnitude[3]
+    top = list(np.argsort(-vals)[:20])
+    low = list(np.argsort(vals)[:20])  # 20 smallest
+    assert trunk.mean_removed_activation(3, top) > \
+        trunk.mean_removed_activation(3, low)
