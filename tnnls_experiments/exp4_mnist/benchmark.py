@@ -125,6 +125,105 @@ def build_discovery_clusters(splits: dict, store: ResultStore,
 
 
 # ---------------------------------------------------------------------------
+# Stage: held-out test-cluster assignment (feedback round 2, Phase A)
+# ---------------------------------------------------------------------------
+
+TEST_ASSIGNMENT_CHECK_SUBSET = 10  # every 10th discovery image
+
+
+def assignment_checks(emb_disc: np.ndarray, labels_fit: np.ndarray, ph, km,
+                      x_disc: np.ndarray, x_test: np.ndarray,
+                      labels_test: np.ndarray, emb_test: np.ndarray) -> tuple[dict, ...]:
+    """Assignment-behavior checks (run BEFORE any effect is read).
+
+    - self-transform (machinery check): a subset of discovery points
+      re-transformed through the fitted PHATE object should recover its
+      fit-time cluster labels — the interpolation path works.
+    - kNN-consistency (out-of-sample check): each test assignment agrees
+      with the fit-time cluster of its nearest discovery neighbor in the
+      embedding space; reported descriptively, never as a certificate
+      (the program's implementation-sanity-check convention, §E3.3).
+
+    Returns (checks, nn_dist, nn_ind) — nn_* are per-test-image arrays.
+    """
+    from sklearn.neighbors import NearestNeighbors
+
+    subset = np.arange(0, len(x_disc), TEST_ASSIGNMENT_CHECK_SUBSET)
+    emb_self = km.predict(ph.transform(x_disc[subset]))
+    self_agreement = float((emb_self == labels_fit[subset]).mean())
+    nn = NearestNeighbors(n_neighbors=1).fit(emb_disc)
+    nn_dist, nn_ind = nn.kneighbors(emb_test)
+    nn_labels = labels_fit[nn_ind[:, 0]]
+    checks = {
+        "self_transform_agreement": self_agreement,
+        "n_self_check": int(len(subset)),
+        "knn_consistency": float((nn_labels == labels_test).mean()),
+        "nn_dist_median": float(np.median(nn_dist)),
+        "nn_dist_p95": float(np.percentile(nn_dist, 95)),
+    }
+    return checks, nn_dist, nn_ind
+
+
+def build_test_cluster_assignment(splits, store,
+                                  n_clusters: int = N_CLUSTERS) -> np.ndarray:
+    """Assign each test image to one of the fixed discovery clusters.
+
+    Rule (frozen; feedback round 2, §E4.15): PHATE refit deterministically
+    on the discovery pixels (same seeds as the clusters stage), the fitted
+    k-means labels the discovery set, and kmeans.predict on the PHATE
+    out-of-sample transform of the test pixels assigns each test image.
+    Assignment-behavior checks run BEFORE any effect is consumed; the
+    per-(cluster, digit) cohort table is saved for the profiles stage.
+    Digit labels are used only for cohort descriptions, never by the
+    assignment itself.
+    """
+    cond = {"stage": "test_clusters", "phate_seed": CLUSTER_PHATE_SEED,
+            "kmeans_seed": CLUSTER_KMEANS_SEED, "k": n_clusters}
+    if store.is_done(cond, ("assignments",)):
+        z = pd.read_parquet(store.shard_path(cond, "assignments"))
+        return z.set_index("test_index")["test_cluster"].sort_index().to_numpy()
+
+    import phate
+    from sklearn.cluster import KMeans
+
+    x_disc = splits["discovery_x"].numpy()
+    x_test_all = splits["test_x"].numpy()
+    ph = phate.PHATE(n_components=10, random_state=CLUSTER_PHATE_SEED,
+                     n_pca=100, verbose=False, n_jobs=8)
+    emb_disc = ph.fit_transform(x_disc)
+    km = KMeans(n_clusters=n_clusters, n_init=50,
+                random_state=CLUSTER_KMEANS_SEED).fit(emb_disc)
+    labels_fit = km.labels_
+    emb_test = ph.transform(x_test_all)
+    labels_test_km = km.predict(emb_test)
+    checks, nn_dist, nn_ind = assignment_checks(
+        emb_disc, labels_fit, ph, km, x_disc, x_test_all, labels_test_km,
+        emb_test)
+    nn_cluster = labels_fit[nn_ind[:, 0]]
+    rows = [{
+        "test_index": i,
+        "test_cluster": int(labels_test_km[i]),
+        "nn_cluster": int(nn_cluster[i]),
+        "nn_distance": float(nn_dist[i, 0]),
+    } for i in range(len(x_test_all))]
+    store.write(cond, "assignments", rows)
+    # cohort table (cluster -> size + test-digit counts), labels read only here
+    y_test = splits["test_y"].numpy()
+    cohort = {c: {"n": int((labels_test_km == c).sum()),
+                  "digits": np.bincount(y_test[labels_test_km == c],
+                                        minlength=10).tolist()}
+              for c in range(n_clusters)}
+    meta = {"checks": checks, "cohort_sizes": cohort}
+    with open(config.RAW_DIR / EXPERIMENT / "test_assignments_meta.json",
+              "w") as f:
+        json.dump(meta, f, indent=2)
+    logger.info("test-cluster assignment: self-agreement %.3f (n=%d), "
+                "kNN consistency %.3f", checks["self_transform_agreement"],
+                checks["n_self_check"], checks["knn_consistency"])
+    return labels_test_km
+
+
+# ---------------------------------------------------------------------------
 # Representations
 # ---------------------------------------------------------------------------
 
@@ -693,6 +792,10 @@ def main(cfg: dict, stages: tuple[str, ...] = ("clusters", "fits", "ablations"))
                 "kmeans_seed": CLUSTER_KMEANS_SEED, "k": int(defaults["n_clusters"])}
         z = pd.read_parquet(store.shard_path(cond, "clusters"))
         labels_cluster = z.set_index("discovery_index")["cluster"].sort_index().to_numpy()
+
+    if "test_clusters" in stages:
+        build_test_cluster_assignment(splits, store,
+                                      int(defaults["n_clusters"]))
 
     summary = {}
     for model_seed in defaults["model_seeds"]:

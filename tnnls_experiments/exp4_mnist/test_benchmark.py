@@ -226,6 +226,38 @@ def test_tiny_cluster_excluded_from_grid(tmp_path, monkeypatch):
     assert "excluded [1]" in cov.attrs["note"]
 
 
+def test_assignment_checks_synthetic():
+    # Machinery check on synthetic blobs with an identity PHATE stub: the
+    # self-transform agreement and kNN-consistency rates are computed and
+    # aligned (blobs separated; k-means recovers the blocks).
+    from sklearn.cluster import KMeans
+
+    from tnnls_experiments.exp4_mnist.benchmark import (
+        TEST_ASSIGNMENT_CHECK_SUBSET, assignment_checks)
+
+    class _IdentityPHATE:
+        def transform(self, X):
+            return np.asarray(X, dtype=float)
+
+    rng = np.random.default_rng(0)
+    centers = rng.standard_normal((3, 10)) * 8
+    emb_disc = np.vstack([centers[c] + rng.standard_normal((200, 10))
+                          for c in range(3)])
+    km = KMeans(3, n_init=3, random_state=0).fit(emb_disc)
+    labels_fit = km.labels_
+    emb_test = np.vstack([centers[c] + rng.standard_normal((50, 10))
+                          for c in range(3)])
+    # the assignment under test: k-means labels from the fitted object
+    labels_test = km.predict(emb_test)
+    checks, dist, ind = assignment_checks(
+        emb_disc, labels_fit, _IdentityPHATE(), km, emb_disc, emb_test,
+        labels_test, emb_test)
+    assert checks["self_transform_agreement"] == pytest.approx(1.0)
+    assert checks["knn_consistency"] > 0.9
+    assert checks["n_self_check"] == len(emb_disc) // TEST_ASSIGNMENT_CHECK_SUBSET
+    assert dist.shape == (150, 1) and ind.shape == (150, 1)
+
+
 def test_posthoc_logit_mi_identifies_associated_logit():
     # Hidden-only fit + post-hoc association: every factor built from latent
     # 0-family tracks logit 3, and that logit dominates for those factors.

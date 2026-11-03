@@ -556,7 +556,6 @@ a knife-edge choice; activity-matched arm not triggered (Finding 1).
   an influence statement, not an interaction-type characterization.
 
 ## E4.15 Decision log (feedback of 2026-11-03 — all adopted)
-
 | # | Decision | Status |
 |---|---|---|
 | 1 | Fit-side TC/MI units | **Bits**, conversion at the fit boundary, documented (§E4.5) |
@@ -580,3 +579,23 @@ dose-response empirically assessed (§E4.12 R5), concordance read jointly
 with absolute shift (§E4.12 R6), removal-activation diagnostic with
 conditional activity-matched sensitivity arm (§E4.8), grid arithmetic
 corrected (§E4.11).
+
+**Round-2 adoptions (2026-11-03, second review of §E4.14's first cut; all
+adopted):**
+
+| # | Decision | Status |
+|---|---|---|
+| 9 | In-cluster re-interpretation | The dominant-digit analysis is **retracted to a coarse descriptive cut** (shift-mass on the discovery cluster's dominant digit class, distributions only); the 0.86 "cluster-proportional null" is withdrawn as unjustified (cluster purity ≠ predicted effect-mass distribution), and "factors spare their discovery cluster" language is dropped |
+| 10 | Factor-heterogeneity program | **Adopted (exploratory):** per-factor behavioral profiles before aggregation — per-image a_f(x) = ½‖·‖₁ summarized over the 20 evaluation clusters × 10 true classes; held-out cohort effects (own cluster / same digit other clusters / other digits) with cohort sizes and per-image averages; association treated as a separate axis (strength in bits, gap, never argmax alone); cluster locality as annotation |
+| 11 | Test-cluster assignment rule (Phase A, frozen) | PHATE refit deterministically (seed 5200) on discovery; fitted k-means labels discovery; `kmeans.predict` on the PHATE out-of-sample transform assigns test images; PHATE's built-in pre-fit-transform warning anticipated and answered by assignment-behavior checks run and reported before any effect is read |
+| 12 | Profiles scope (Phase B) | q = 0.80, both input conditions, LC + matched-random profiles; grids stored per model seed; heatmaps seeded |
+| 13 | Stratified readout (Phase D) | Selection on discovery-side association strength/gap ONLY (independent of intervention outcomes), exploratory label, controls on the same cohorts |
+| 14 | q extension | **[0.95, 0.99] as a supplementary, post-hoc-documented extension** (no q = 1.0 — with nonnegative association scores the support degenerates to the whole layer, a layer wipe whose controls degenerate identically); at q = 0.99 report support density and cross-factor support overlap (Jaccard, post-hoc from stored supports) |
+| 15 | Round-1 coarse in-cluster row | Kept as one descriptive paragraph (skewed r_dom distribution), never a finding |
+
+Round-2 phases: A = assignment + checks + cohort table (executed
+2026-11-03: self-transform agreement 0.975 on n = 1,000; out-of-sample
+kNN consistency 0.966; cohorts 262–1,110 test images per cluster;
+PHATE's standard pre-fit-transform warning noted — the checks above are
+the relied-upon response); B = profiles grids (pending); C = aligned
+heatmaps (pending); D = exploratory stratified readout (pending).
