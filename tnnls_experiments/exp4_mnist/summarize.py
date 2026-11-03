@@ -183,23 +183,17 @@ def tc_magnitude_relationship(abl: pd.DataFrame, factors: pd.DataFrame,
     correlation after removing the (linear) dependence of T_max on support
     size — does the TC-magnitude link persist beyond 'more units selected'?
     (Empirical: nested supports guarantee only that support size grows
-    monotonically in q, not the effect monotonicity.)
-
-    factor TC reaches the intervention rows through merging the factors and
-    supports tables by the factor key (the same merge as the
-    tc_density_magnitude table).
+    monotonically in q, not the effect monotonicity.) The `sup` argument is
+    unused here only for call-site symmetry; support_size rides on the
+    ablation rows.
     """
     from scipy.stats import spearmanr
 
     lc = abl[(abl["method"] == "local_corex")
              & (abl["input_condition"] == "output_aware")].copy()
     fkey = ["model_seed", "cluster", "layer", "input_condition", "factor_index"]
-    lc = lc.merge(
-        factors[fkey + ["factor_tc"]], on=fkey, how="inner")
-    skey = fkey + ["threshold"]
-    dens = sup.drop_duplicates(subset=skey)[
-        skey + ["support_density", "support_size"]]
-    lc = lc.merge(dens, on=skey, how="inner")
+    lc = lc.merge(factors[fkey + ["factor_tc"]], on=fkey, how="inner")
+    # support_size travels on the ablation rows themselves (matched-key base)
     rows = []
     for (layer, q), grp in lc.groupby(["layer", "threshold"]):
         ok = grp[np.isfinite(grp["factor_tc"]) & np.isfinite(grp["T_max"])]

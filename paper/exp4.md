@@ -429,9 +429,18 @@ supported Reading 6 is stated as directional influence, nothing more.
   conditions × 3 random controls): 33 exp4 + 19 shared + 12 exp3-human
   tests pass; per-seed stages 6 s; all ten summary tables regenerate
   (`tc_magnitude` is empty on the smoke grid — its per-stratum n < 8
-  minimum); feasibility pilot (2 model seeds × full 20 clusters × all
-  layers, one threshold) — [placeholder]; then the full grid behind the
-  user's GO.
+  minimum); feasibility pilot (2026-11-03; 2 model seeds × all 20 clusters
+  × layers H1–H3 × q = 0.80, full random-control counts — **240/240 fit
+  conditions completed**, every condition retaining all 5 positive-TC
+  factors (no shortfalls), zero failed fits, zero zero-effect rows, no
+  tiny-cluster exclusions (all 20 clusters ≥ 100 discovery obs); ~300 s
+  per model seed, ~10.5 min total including the PHATE/k-means stage; all
+  predeclared summary tables regenerate from pilot shards; the pilot's
+  data were examined only for mechanics and coverage verification — no
+  conclusions are read from them); **full-grid budget from measured
+  rates: ≈ 1.5–2 GPU-hours serial for the 141k-evaluation grid, plus
+  ~5 min for the three remaining model trainings**; then the full grid
+  behind the user's GO.
 
 ## E4.14 Results
 
