@@ -216,12 +216,15 @@ def tc_magnitude_relationship(abl: pd.DataFrame, factors: pd.DataFrame,
     return pd.DataFrame(rows)
 
 
-def coverage(abl: pd.DataFrame, factors: pd.DataFrame) -> pd.DataFrame:
+def coverage(abl: pd.DataFrame, factors: pd.DataFrame,
+             cluster_sizes: dict | None = None) -> pd.DataFrame:
     """Coverage table: short factor retention and zero-effect interventions
     stay visible, so prevalence cannot improve because difficult cases
-    disappeared. One row per (model_seed, layer, input_condition); the port
-    adds the excluded (tiny) clusters here."""
-    lc = abl[(abl["method"] == "local_corex")]
+    disappeared. One row per (model_seed, layer, input_condition).
+    With cluster_sizes, tiny-cluster exclusions (predeclared n < 100 rule)
+    are named here rather than silently shrinking the grid."""
+    lc = abl[(abl["method"] == "local_corex") if "method" in abl.columns
+             else [False] * len(abl)]
     rows = []
     for k, grp in lc.groupby(["model_seed", "layer", "input_condition"]):
         rows.append({
@@ -235,15 +238,36 @@ def coverage(abl: pd.DataFrame, factors: pd.DataFrame) -> pd.DataFrame:
     n_factors = factors.groupby(
         ["model_seed", "layer", "input_condition", "cluster"]
     ).size().rename("n_factors_fit").reset_index()
-    if len(rows):
-        cov = pd.DataFrame(rows)
-        counts = n_factors.groupby(
-            ["model_seed", "layer", "input_condition"])["n_factors_fit"].min()
-        cov = cov.merge(counts.reset_index(),
-                        on=["model_seed", "layer", "input_condition"],
-                        how="left")
-        return cov
-    return pd.DataFrame()
+    if not rows:
+        return pd.DataFrame()
+    cov = pd.DataFrame(rows)
+    counts = n_factors.groupby(
+        ["model_seed", "layer", "input_condition"])["n_factors_fit"].min()
+    cov = cov.merge(
+        counts.reset_index(), on=["model_seed", "layer", "input_condition"],
+        how="left")
+    if cluster_sizes:
+        tiny = {c: n for c, n in cluster_sizes.items() if n < 100}
+        cov.attrs["tiny_clusters_excluded"] = tiny
+        cov.attrs["note"] = (
+            f"tiny-cluster rule (<100 discovery obs): "
+            f"excluded {sorted(tiny)}" if tiny
+            else "no clusters excluded (all sizes >= 100)")
+    return cov
+
+
+def _discovery_cluster_sizes(store) -> dict | None:
+    """Per-cluster discovery counts from the clusters shards; None when
+    unavailable or when shards from multiple partitions (different k) are
+    merged, in which case the size table would be ambiguous."""
+    try:
+        z = store.read_all("clusters")
+    except Exception:
+        return None
+    if z.empty or z["discovery_index"].nunique() != 10_000:
+        return None
+    counts = z["cluster"].value_counts().sort_index()
+    return {int(c): int(n) for c, n in counts.items()}
 
 
 def hierarchical_bootstrap(abl: pd.DataFrame, metric: str, n_boot: int = 2000,
@@ -289,7 +313,8 @@ def main() -> dict:
     out["oa_vs_ho"] = output_aware_vs_hidden_only(abl)
     out["effective_units"] = effective_units_by_layer_threshold(factors)
     out["tc_magnitude"] = tc_magnitude_relationship(abl, factors, sup)
-    out["coverage"] = coverage(abl, factors)
+    out["coverage"] = coverage(
+        abl, factors, cluster_sizes=_discovery_cluster_sizes(store))
     # relationship table: TC, density, magnitude at factor level
     lc = abl[(abl["method"] == "local_corex")
              & (abl["input_condition"] == "output_aware")]

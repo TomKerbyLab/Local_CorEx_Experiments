@@ -188,6 +188,44 @@ def _latent_block_data(n=400, n_h=40, seed=1):
     return H, L
 
 
+def test_tiny_cluster_excluded_from_grid(tmp_path, monkeypatch):
+    # Predeclared tiny-cluster rule: clusters with < MIN_CLUSTER_OBS
+    # discovery observations define no fits and no interventions, and the
+    # exclusion is visible, never silent padding.
+    from tnnls_experiments.common import config as cfg_mod, store as store_mod
+    monkeypatch.setattr(cfg_mod, "RAW_DIR", tmp_path)
+    monkeypatch.setattr(store_mod, "RAW_DIR", tmp_path)
+    (tmp_path / "mnist").mkdir(parents=True, exist_ok=True)
+
+    model, xs, ys = _trained_tiny_model(n=1200, epochs=2)
+    import torch as T
+    splits = {
+        "discovery_x": xs[:1000], "discovery_y": T.tensor(ys[:1000]),
+        "test_x": xs[1000:], "test_y": T.tensor(ys[1000:]),
+    }
+    store = store_mod.ResultStore("mnist")
+    labels_cluster = np.array([0] * 940 + [1] * 60)  # cluster 1 is tiny
+    cfg = {
+        "n_factors": 3, "n_retained": 2, "support_thresholds": [0.6],
+        "n_random_controls": 2, "n_random_controls_hidden_only": 1,
+        "input_conditions": ["output_aware"], "layers": [3],
+        "n_clusters": 2,
+    }
+    from tnnls_experiments.exp4_mnist.benchmark import (MIN_CLUSTER_OBS,
+                                                        run_fit_stage,
+                                                        run_ablation_stage)
+    assert MIN_CLUSTER_OBS == 100
+    run_fit_stage(99, splits, labels_cluster, model, "cpu", store, cfg)
+    factors = store.read_all("factors")
+    assert set(factors["cluster"]) == {0}   # tiny cluster has no fits
+    run_ablation_stage(99, splits, labels_cluster, model, "cpu", store, cfg)
+    from tnnls_experiments.exp4_mnist.summarize import coverage
+    cov = coverage(store.read_all("ablation_summary"), factors,
+                   cluster_sizes={0: 940, 1: 60})
+    assert cov.attrs["tiny_clusters_excluded"] == {1: 60}
+    assert "excluded [1]" in cov.attrs["note"]
+
+
 def test_posthoc_logit_mi_identifies_associated_logit():
     # Hidden-only fit + post-hoc association: every factor built from latent
     # 0-family tracks logit 3, and that logit dominates for those factors.

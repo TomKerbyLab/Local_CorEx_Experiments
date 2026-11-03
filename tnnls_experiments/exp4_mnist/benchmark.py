@@ -62,6 +62,10 @@ MODEL_SEEDS = (5100, 5101, 5102, 5103, 5104)
 LAYERS = (1, 2, 3)
 VAR_FLOOR = 1e-12
 NATS_TO_BITS = 1.0 / np.log(2.0)  # Linear CorEx reports TC/MI in nats
+# Tiny-cluster rule (pre-registered §E4.4, decision 3): discovery clusters
+# with fewer observations are recorded and excluded from the intervention
+# grid; every exclusion is visible in the coverage report.
+MIN_CLUSTER_OBS = 100
 
 INPUT_CONDITIONS = ("output_aware", "hidden_only")
 
@@ -323,7 +327,10 @@ def run_fit_stage(model_seed, splits, labels_cluster, model, device,
     x_disc = splits["discovery_x"]
     for cluster in range(int(cfg["n_clusters"])):
         idx = np.flatnonzero(labels_cluster == cluster)
-        if len(idx) == 0:
+        if len(idx) < MIN_CLUSTER_OBS:
+            logger.info("cluster %d has %d discovery obs (< %d); excluded "
+                        "from the grid (tiny-cluster rule); reported in "
+                        "coverage", cluster, len(idx), MIN_CLUSTER_OBS)
             continue
         xc = x_disc[torch.tensor(idx)]
         h1, h2, h3, logits = extract_representations(model, xc, device)
@@ -568,7 +575,10 @@ def run_ablation_stage(model_seed, splits, labels_cluster, model, device,
     trunk = TrunkEvaluator(model, splits["test_x"], device)
     for cluster in range(int(cfg["n_clusters"])):
         idx = np.flatnonzero(labels_cluster == cluster)
-        if len(idx) == 0:
+        if len(idx) < MIN_CLUSTER_OBS:
+            logger.info("cluster %d has %d discovery obs (< %d); excluded "
+                        "from ablations (tiny-cluster rule)", cluster,
+                        len(idx), MIN_CLUSTER_OBS)
             continue
         xc = x_disc[torch.tensor(idx)]
         h1, h2, h3, logits_disc = extract_representations(model, xc, device)
