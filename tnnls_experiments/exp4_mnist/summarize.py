@@ -62,23 +62,26 @@ def paired_lc_vs_control(abl: pd.DataFrame, control: str) -> pd.DataFrame:
     rows = []
     for metric in ("T_max", "T_weighted", "H_input", "D_input", "U_max",
                    "flip_rate"):
-        for layer in sorted(merged["layer"].unique()):
-            sub = merged[merged["layer"] == layer]
-            d = (sub[f"{metric}_lc"] - sub[f"{metric}_{control}"]).to_numpy(float)
-            d = d[np.isfinite(d)]
-            # seed-level aggregation: the replicate is the model seed
-            per_seed = sub.groupby("model_seed").apply(
-                lambda g: (g[f"{metric}_lc"] - g[f"{metric}_{control}"]).mean()
-            ).to_numpy(float)
-            n = len(per_seed)
-            if n == 0:
-                continue
-            mean = float(per_seed.mean())
-            se = float(per_seed.std(ddof=1) / np.sqrt(n)) if n > 1 else 0.0
-            rows.append({
-                "metric": metric, "layer": layer, "control": control,
-                "mean_diff": mean, "se": se, "n_pairs": len(d), "n_seeds": n,
-            })
+        for threshold in sorted(merged["threshold"].unique()):
+            for layer in sorted(merged["layer"].unique()):
+                sub = merged[(merged["layer"] == layer)
+                             & (merged["threshold"] == threshold)]
+                d = (sub[f"{metric}_lc"] - sub[f"{metric}_{control}"]).to_numpy(float)
+                d = d[np.isfinite(d)]
+                # seed-level aggregation: the replicate is the model seed
+                per_seed = sub.groupby("model_seed").apply(
+                    lambda g: (g[f"{metric}_lc"] - g[f"{metric}_{control}"]).mean()
+                ).to_numpy(float)
+                n = len(per_seed)
+                if n == 0:
+                    continue
+                mean = float(per_seed.mean())
+                se = float(per_seed.std(ddof=1) / np.sqrt(n)) if n > 1 else 0.0
+                rows.append({
+                    "metric": metric, "layer": layer, "threshold": float(threshold),
+                    "control": control,
+                    "mean_diff": mean, "se": se, "n_pairs": len(d), "n_seeds": n,
+                })
     return pd.DataFrame(rows)
 
 
@@ -210,6 +213,31 @@ def tc_magnitude_relationship(abl: pd.DataFrame, factors: pd.DataFrame,
     return pd.DataFrame(rows)
 
 
+def cutoff_sensitivity(abl: pd.DataFrame) -> pd.DataFrame:
+    """Supplementary (predeclared): prevalence over the T_max x H_input
+    cutoff grid {0.05, 0.10, 0.15} x {0.40, 0.50, 0.60}, by layer and
+    threshold. Zero-effect rows (T_max = 0) fail every T cutoff and
+    NaN-entropy rows fail every H cutoff, so no cutoff combination can
+    resurrect a degenerate intervention."""
+    lc = abl[abl["method"] == "local_corex"]
+    rows = []
+    for (layer, q), grp in lc.groupby(["layer", "threshold"]):
+        per_seed = grp.groupby("model_seed").apply(
+            lambda g, group_key=None: pd.Series({
+                f"T{Tt:.2f}_H{Ht:.2f}": float(
+                    ((g["T_max"] >= Tt) & (g["H_input"] <= Ht)).mean())
+                for Tt in (0.05, 0.10, 0.15)
+                for Ht in (0.40, 0.50, 0.60)})
+        )
+        for cutoff in per_seed.columns:
+            rows.append({"layer": layer, "threshold": q, "cutoff": cutoff,
+                         "prevalence": float(per_seed[cutoff].mean()),
+                         "se": float(per_seed[cutoff].std(ddof=1)
+                                      / np.sqrt(len(per_seed)))
+                         if len(per_seed) > 1 else 0.0})
+    return pd.DataFrame(rows)
+
+
 def coverage(abl: pd.DataFrame, factors: pd.DataFrame,
              cluster_sizes: dict | None = None) -> pd.DataFrame:
     """Coverage table: short factor retention and zero-effect interventions
@@ -309,6 +337,7 @@ def main() -> dict:
     out["tc_magnitude"] = tc_magnitude_relationship(abl, factors, sup)
     out["coverage"] = coverage(
         abl, factors, cluster_sizes=_discovery_cluster_sizes(store))
+    out["cutoff_sensitivity"] = cutoff_sensitivity(abl)
     # relationship table: TC, density, magnitude at factor level
     lc = abl[(abl["method"] == "local_corex")
              & (abl["input_condition"] == "output_aware")]

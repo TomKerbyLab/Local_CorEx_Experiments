@@ -456,10 +456,104 @@ supported Reading 6 is stated as directional influence, nothing more.
   time ~49 min (≈585 s per seed). All seven primary summary tables (plus
   coverage, effective-units, and TC-magnitude) regenerate from the
   shipped shards; results in §E4.14.
+- **Results and displays (2026-11-03):** the summarizer gained per-threshold
+  paired comparisons and the predeclared cutoff-sensitivity table
+  (§E4.14); results committed with the human-pipeline record
+  `tnnls_human_experiments/exp4_mnist_benchmark/` (results CSVs, model
+  metadata, run report, resolved config) and rendered by
+  `figures_exp4.py` → committed PNGs `fig01`–`fig06`; the exploration
+  notebook `analysis_exp4_results.ipynb` (results-only dependencies) is
+  executed and committed. The qualitative reconstruction panel (§spec,
+  predeclared cluster rule, seed 5100) remains the one pending display.
 
 ## E4.14 Results
 
-*(written after the executed run; nothing claimed here now)*
+All numbers are from the executed full grid (§E4.13): 600/600 fits (all
+converged, 5 positive-TC factors each), 141,000 interventions, zero
+zero-effect rows, zero exclusions — the predeclared degenerate-outcome
+machinery (§E4.10) never fired, so every prevalence below is over the full
+5 × 20 × 5 = 500-intervention strata. Model-seed spread is small throughout
+(SEs quoted); the five per-seed rows are available in the committed tables.
+
+**Finding 1 — Reading 1 supported: recovery feeds the instrument, far beyond
+size-matched random deletion.** Paired LC − random differences are favorable
+at every metric × layer × threshold; per-seed values agree tightly (e.g.
+T_max excess at H2, q = 0.9: per-seed means 0.146/0.183/0.162/0.168/0.147
+across the five seeds, random-mean 0.005–0.006 at the same sizes). Matched
+random deletion of 50–130 units is behaviorally inert (T_max ≈ 0.005) while
+LC supports of the same size move the classifier's class means by up to
+0.98 (largest single-cell probability shift). Cancellation is negligible:
+T/U ≈ 0.93–0.97 across layers and ΔU_max ≈ ΔT_max. The activity-matching
+trigger (§E4.8) never fired (median LC/random removed-activation ratios
+1.01–1.03), so the size-matched comparisons are not confounded with removed
+magnitude. This is the empirical support for identify-then-intervene on a
+real network (§E3.9's design argument, now measured).
+
+**Finding 2 — Reading 4: the dose-response has no specificity penalty.**
+Support density rises with q at every layer (0.06–0.10 at q = 0.6 →
+0.20–0.29 at q = 0.9), T_max rises monotonically, and mean H_input falls
+(e.g. H2: 0.75 → 0.56): taking more of the factor's MI yields stronger AND
+more class-concentrated interventions. The spec's anticipated specificity
+trade-off did not appear in this grid.
+
+**Finding 3 — Reading 3: the layer structure is pronounced; H1 is
+behaviorally quiet.** Prevalence increases with q mostly at H2/H3 (q = 0.9:
+H2 0.376, H3 0.370; H1 ≤ 0.06 at every q). LC absolute effects at q = 0.9:
+T_max 0.113/0.171/0.155 (mean H_input 0.76/0.56/0.59). The interpretive
+content: under this probe, behavioral influence concentrates in the deeper
+layers; H1 factors' deletions are small and less class-focused.
+
+**Finding 4 — Reading 2: the multivariate-vs-univariate contrast is local
+to H3.** LC beats the univariate logit-association control in paired
+differences at H3 (ΔT_max ≈ +0.02–0.03; ΔH_input ≈ −0.05–−0.08 across q)
+and is within ±0.008 (T_max) / ±0.004 (H_input) at H1/H2. Claim scoped
+exactly there: multivariate factor membership adds behavioral specificity
+at the last hidden layer; elsewhere the size-matched univariate ranking
+performs comparably.
+
+**Finding 5 — Reading 7 (fair OA-vs-HO): logits in the fit are behaviorally
+negligible.** On excess-over-matched-random at q = 0.8 (support sizes
+~79/51/57 units output-aware), condition differences are ≤ 0.006 in T_max
+excess and ≤ 0.012 in H_input excess — small relative to the excesses
+themselves. The behavioral specificity does not depend on including logits
+in the fit (which also keeps the label-free framing uncompromised).
+
+**Finding 6 — the TC–magnitude link is real but size-mediated.** Raw
+Spearman(TC, T_max) is weak (−0.18 to +0.27 across strata) but
+support-size-adjusted Spearman is positive at every stratum (0.29–0.48):
+within a fixed support size, higher-TC factors produce stronger effects.
+Effective number of units (factors) is 66–128 — no factor is a single
+dominant unit (≈1 would be); H1 associations are broadest (~100 of 500
+units). Supports genuinely encode distributed structure, and the
+distributed deletion — not a few heavy units minus padding — carries the
+effect.
+
+**Finding 7 — Reading 6, descriptive: directional concordance tracks
+layer.** Reduction-concordance (associated class = most reduced class):
+H1 0.27, H2 0.75, H3 0.55 (output-aware; hidden-only within ±0.05
+everywhere). Chance is 0.10. With the absolute shift at the associated
+class (0.022/0.068/0.047) rising and falling with it. Per §E4.12 R6:
+descriptive directional-influence language only; MI association is
+sign-blind and masking is not a directed latent change.
+
+**Sensitivity items (predeclared, closed):** the cutoff sensitivity grid
+(T_max ∈ {0.05,0.10,0.15} × H_input ∈ {0.40,0.50,0.60}; 108 strata,
+`cutoff_sensitivity`) is monotone in both cutoffs and never exceeds 0.47
+prevalence at the loosest cutoffs — the primary (0.10, 0.50) point is not
+a knife-edge choice; activity-matched arm not triggered (Finding 1).
+
+**Scoped conclusions (influence language only, per §E4.1/§E4.12):**
+
+- On this network, cumulative-MI supports of top-ranked Local CorEx factors
+  identify unit sets whose deletion yields substantial, class-concentrated
+  prediction shifts relative to size-matched random and (at H3)
+  univariate-association controls.
+- The effects are threshold-dose-dependent without a specificity penalty,
+  concentrated at H2/H3, and not materially dependent on fitting with
+  logits included.
+- Reading 6's concordance is directional evidence consistent with the
+  factors' strongest logit association; by the §E3.9 restraint it remains
+  an influence statement, not an interaction-type characterization.
 
 ## E4.15 Decision log (feedback of 2026-11-03 — all adopted)
 

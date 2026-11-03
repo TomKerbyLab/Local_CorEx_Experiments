@@ -1,0 +1,12 @@
+{
+  "root_seed": 5104,
+  "best_epoch": 83,
+  "best_val_loss": 0.0006439355784095824,
+  "test_acc": 0.9861999750137329,
+  "test_loss": 0.053088586777448654,
+  "runtime_s": 219.12921667099,
+  "acc_flag_below_97": false,
+  "n_epochs_run": 94,
+  "checkpoint": "/yunity/tkerby2/claude_experiments/Local_CorEx_Experiments/.claude/worktrees/exp4-prep/outputs/checkpoints/mnist/mnist_seed5104.pt",
+  "checkpoint_hash": "b15cf623a7b80b4b"
+}
