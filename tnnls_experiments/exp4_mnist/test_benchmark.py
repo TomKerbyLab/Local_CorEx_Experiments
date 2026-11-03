@@ -258,6 +258,48 @@ def test_assignment_checks_synthetic():
     assert dist.shape == (150, 1) and ind.shape == (150, 1)
 
 
+def test_profiles_stage_machinery(tmp_path, monkeypatch):
+    # Profile grids: LC + random_mean per factor, 200 cells, valid stats;
+    # random-mean magnitudes are near the per-image null level.
+    from tnnls_experiments.common import config as cfg_mod, store as store_mod
+    monkeypatch.setattr(cfg_mod, "RAW_DIR", tmp_path)
+    monkeypatch.setattr(store_mod, "RAW_DIR", tmp_path)
+    (tmp_path / "mnist").mkdir(parents=True, exist_ok=True)
+
+    model, xs, ys = _trained_tiny_model(n=1200, epochs=2)
+    import torch as T
+    splits = {
+        "discovery_x": xs[:1000], "discovery_y": T.tensor(ys[:1000]),
+        "test_x": xs[1000:], "test_y": T.randint(0, 10, (200,)),
+    }
+    store = store_mod.ResultStore("mnist")
+    labels_cluster = np.array([0] * 1000)  # one cluster
+    test_cluster = np.tile(np.arange(20), 10)  # 200 test images, 20 cohorts
+    cfg = {"n_factors": 3, "n_retained": 2, "support_thresholds": [0.8],
+           "n_random_controls": 4, "n_random_controls_hidden_only": 2,
+           "input_conditions": ["output_aware"], "layers": [3],
+           "n_clusters": 1}
+    from tnnls_experiments.exp4_mnist.benchmark import (
+        run_fit_stage, run_profiles_stage)
+    run_fit_stage(99, splits, labels_cluster, model, "cpu", store, cfg)
+    run_profiles_stage(99, splits, labels_cluster, test_cluster, model,
+                       "cpu", store, cfg)
+    pr = store.read_all("profiles")
+    assert set(pr.method) == {"local_corex", "random_mean"}
+    for _, grp in pr.groupby(["factor_index", "method"]):
+        # one row per occupied (cohort, true-class) cell, sizes sum to test N
+        assert grp.n_images.sum() == 200 and (grp.n_images >= 1).all()
+    expected_pairs = {(int(c), int(d)) for c, d in
+                      zip(test_cluster, splits["test_y"].numpy())}
+    got = set(zip(pr[pr.method == "local_corex"].eval_cluster,
+                  pr[pr.method == "local_corex"].true_class))
+    assert got == expected_pairs
+    assert (pr.a_mean >= 0).all() and pr.flip_rate.between(0, 1).all()
+    # LC profile rows carry the key fields
+    assert {"layer", "input_condition", "threshold", "dominant_logit"} \
+        <= set(pr.columns)
+
+
 def test_posthoc_logit_mi_identifies_associated_logit():
     # Hidden-only fit + post-hoc association: every factor built from latent
     # 0-family tracks logit 3, and that logit dominates for those factors.

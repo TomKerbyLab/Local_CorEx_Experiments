@@ -1,106 +1,82 @@
-**Yes. This closely matches the systematic MNIST experiment we discussed.** I would keep the overall design. Most of my pushback concerns the interpretation and analysis plan, rather than the experimental grid.
+**Yes. I think factor heterogeneity is the right next question.** The pooled results answer, “What happens when we delete supports from highly ranked factors?” Your question is more specific: “Which factors have class-related, cluster-related, or broadly shared influence, and can we recognize those differences before intervening?”
 
-The central agreement is intact:
+Those deserve separate analyses. High TC does not imply class specificity, so averaging the top five factors together can obscure meaningful differences.
 
-| Earlier plan | Current description |
-|---|---|
-| Systematically examine all 20 discovery clusters | Preserved, subject to the proposed tiny-cluster rule |
-| H1/H2/H3, top five factors, four cumulative-MI thresholds | Preserved exactly |
-| Evaluate effects by true digit class | Preserved |
-| Separate discovery from intervention evaluation | Clearly implemented |
-| Exact activation deletion | Clearly specified |
-| Compare against matched random and univariate supports | Preserved |
-| Replicate across trained networks | Made concrete with five model seeds |
-| Characterize behavioral specificity without claiming synergy | Explicitly preserved |
+The screenshots also suggest that cancellation is relatively small overall, given the reported \(T/U\) ratios. The larger remaining concern is **pooling different factors and evaluating them on cohorts that are too coarse.**
 
-The hidden-only arm is also a useful addition. It addresses whether including logits materially changes the groups being discovered.
+**I would push back on the current interpretation of “in-cluster” effects.**
 
-The revisions I would make before freezing this are:
+The analysis shown measures effects on the discovery cluster’s **dominant digit throughout the test set**. That is a class view. Even a cluster containing 99% zeros could represent only one particular style of zero. Averaging over every zero can hide an effect confined to that style.
 
-1. **Restore the explicit analysis connecting TC, distributedness, and behavior.**
+The proposed **0.86 “cluster-proportional null” is also unjustified**. Discovery-cluster purity describes which digits occur inside that cluster. It does not imply that 86% of an intervention’s behavioral effect should fall on the dominant digit. Those are different quantities.
 
-   Our earlier discussion distinguished three questions: how highly ranked a factor is, how broadly its information is distributed across units, and what deleting its support does.
+Consequently, I would hold off on statements such as “the factors spare their discovery cluster” or “the majority actively avoid their discovery cluster.” The reported mean and median differences suggest heterogeneity worth investigating, but they do not establish those conclusions.
 
-   The document stores almost everything needed, but its five readings do not explicitly test that relationship. I would predeclare:
+I would approach the next analysis as follows.
 
-   - Support-size and density distributions by layer and threshold.
-   - The relationship between factor TC and intervention magnitude.
-   - Whether that relationship persists after accounting for support size.
+1. **Measure effects on actual held-out cluster members.**
 
-   An effective number of units, computed from normalized hidden-unit MI weights, would also help distinguish a genuinely broad association from one dominant unit accompanied by many weak associations.
+   Assign test images to the existing discovery clusters using a fixed rule derived from discovery data. PHATE provides an interpolation path for new observations, although the assignment behavior should be checked before relying on it. [PHATE 1.0.11 documentation](https://phate.readthedocs.io/en/stable/_modules/phate/phate.html?utm_source=chatgpt.com)
 
-   This would recover an important part of the original scientific story with little additional computation.
+   For each factor, compare effects on:
 
-2. **The directional-concordance hypothesis is stronger than MI association warrants.**
+   - Images assigned to its discovery cluster.
+   - Images of the same digit assigned to other clusters.
+   - Images of other digits.
 
-   Selecting \(c^*=\arg\max_c I(Z;L_c)\) identifies the most associated logit. It does **not** establish that deleting the factor’s support should reduce that class’s probability.
+   That middle comparison is especially valuable. It distinguishes a factor affecting a particular handwriting style from one affecting the digit generally. For mixed clusters, make the comparison within digit and then combine using fixed weights.
 
-   Your own Gaussian-MI formula depends on \(\rho^2\), so positive and negative associations receive the same score. Moreover, zeroing a support is a different operation from changing a latent factor in a specified direction.
+   Use **average effect per image** in each cohort, with cohort sizes reported. Total effect mass would otherwise favor larger cohorts.
 
-   I would retain “associated class is most reduced” as a descriptive result, but also measure whether the associated class exhibits a large **absolute** probability change. A low reduction-concordance rate should not automatically count against the factor’s interpretability.
+2. **Give each factor a behavioral profile before aggregating.**
 
-   A related refinement: consider centered logits, \(L_c-\frac{1}{10}\sum_u L_u\), for discovery associations. From the softmax formula, adding the same image-dependent quantity to every logit leaves predictions unchanged. Raw-logit correlations can nevertheless change. Centering removes that behaviorally irrelevant common component. This is a deduction from the softmax definition. [PyTorch 2.15 documentation](https://docs.pytorch.org/docs/2.15/generated/torch.nn.Softmax.html?utm_source=chatgpt.com)
-
-3. **Keep the class-mean shift metric, but add one measure that cannot cancel across images.**
-
-   The current \(T_y\) matches our earlier plan. It measures systematic displacement of the *average* prediction vector.
-
-   However, substantial changes in opposite directions can cancel within a digit class. I would additionally compute:
+   For factor \(f\), compute an image’s intervention magnitude:
 
    \[
-   U_y=\frac{1}{n_y}\sum_{i:y_i=y}
-   \frac12\left\|p_i^A-p_i^0\right\|_1.
+   a_f(x)=\tfrac12\left\|p_f^{A}(x)-p^0(x)\right\|_1.
    \]
 
-   Here, \(T_y\le U_y\). A small \(T_y\) alongside a large \(U_y\) means substantial individual effects with little net directional change.
+   Then summarize that quantity separately across the ten true classes and the twenty evaluation clusters. Keep the signed probability shifts and recall changes alongside it.
 
-   Prediction-flip rates would be another useful companion. Both can be accumulated during evaluation without storing every image’s probability vector. Class-mean storage remains a reasonable choice.
+   This separates several questions that are currently easy to conflate:
 
-4. **Make the output-aware versus hidden-only comparison fair in what it claims.**
+   - How strong is the effect?
+   - Which input images experience it?
+   - Which output probabilities increase or decrease?
+   - Does the effect concentrate near the discovery region?
 
-   At \(q=0.8\), the two conditions can delete different numbers of units. Their factors also need not correspond by rank.
+   For example, a factor associated with the “7” logit could change the probability of seven across many kinds of images. Another factor could primarily affect images of sevens by increasing a competing class’s probability. Both are class-related, through different relationships.
 
-   I would compare aggregate results within the same seed, cluster, and layer, and report support sizes alongside effects and excess effects over matched random controls. Avoid interpreting a raw difference as an effect of including logits if the output-aware condition simply deletes more units.
+3. **Treat factor association and intervention behavior as separate axes.**
 
-   Omitting the univariate control from hidden-only is acceptable for its supporting role. It limits which comparisons that arm can answer.
+   I would retain profiles such as these:
 
-5. **Soften the interpretation of unsuccessful outcomes.**
+   | Discovery association | Held-out intervention behavior | Interpretation supported |
+   |---|---|---|
+   | Strong class association | Strong, concentrated effect aligned with that class | Candidate for targeted intervention |
+   | Strong class association | Strong, broad effect | Class association with shared behavioral influence |
+   | Strong class association | Small effect | Associated factor with limited influence under this deletion probe |
+   | Weak class association | Strong, concentrated effect | Behavioral specificity poorly captured by the association score |
+   | Weak class association | Small effect | Limited behavioral influence under this probe |
 
-   The statement that failure against random controls becomes “a discovery-limitation finding” is too specific.
+   Cluster locality would be an additional annotation on each profile. A factor could have broad class effects yet unusually strong effects within its discovery cluster.
 
-   Small deletion effects could reflect robustness, compensating pathways, or an intervention that poorly exposes the discovered dependence. MNIST also supplies no ground-truth hidden-unit factor structure against which to declare recovery successful or unsuccessful.
+   Also, **every factor has an argmax logit association**. Calling that logit its “associated class” can make a weak or ambiguous association sound substantive. Report absolute association strength, the gap to competing classes, and association concentration.
 
-   The supported conclusion would be:
+   Within a nearly pure discovery cluster, CorEx is learning dependencies among variation *within* a digit. Those dependencies may concern style or confidence and need not distinguish that digit from other digits.
 
-   > The discovered supports did not yield stronger behavioral selectivity under this deletion probe.
+4. **Define useful strata independently of the effects being evaluated.**
 
-   Likewise, success demonstrates useful support selection relative to the specified controls. A claim that **locality itself** improves discovery would require a global CorEx comparison. I would add that comparison only if you intend to make that claim.
+   Your proposed distinction becomes particularly informative if factors with stronger discovery-side class association subsequently produce more selective held-out effects.
 
-6. **Specify failure handling and the uncertainty target more fully.**
+   Keep the full-grid result, then report conditional results for those independently defined strata, including their prevalence. Apply the same cohorts and target definitions to their matched controls.
 
-   Before running, define what happens with nonconverged fits, zero-total-MI factors, fewer than five usable factors, duplicate supports, and interventions with exactly zero effect. In particular, zero-effect interventions should never become “class-concentrated” through an arbitrary entropy convention.
+   Grouping factors by observed test effects is still useful for describing heterogeneity. However, selecting the most selective factors and then reporting their selectivity does not establish that the method can identify them prospectively. Independent selection and evaluation are needed for that stronger claim. [PubMed](https://pubmed.ncbi.nlm.nih.gov/19396166/?utm_source=chatgpt.com)
 
-   Keep excluded clusters and failed fits visible in coverage reporting, so prevalence cannot improve merely because difficult cases disappear.
+   Since the current outcomes have already been examined, the new stratified analysis should be recorded as exploratory.
 
-   Treating model seeds as replicates is correct. With five seeds, show the five individual results and use a small-sample interval. These intervals describe training-seed variation conditional on this dataset and fixed discovery partition. Resampling clusters addresses a different uncertainty target and should be labeled accordingly.
+**The most useful next display would be two aligned heatmaps:** one row per factor, with ten digit columns in one panel and twenty evaluation-cluster columns in the other. Add discovery-cluster identity, association strength, and support density beside the rows. Show both absolute effects and differences from matched random controls. Summarize the resulting patterns across the five model seeds.
 
-A few smaller corrections also deserve attention:
+That would reveal whether a modest average comes from mostly quiet factors, a mixture of selective and broad factors, or factors whose influence concentrates on different regions.
 
-- **Grid arithmetic:** there are **300 fits per condition, 600 total**, rather than 600 per condition. The listed grid totals **141,000 intervention evaluations**, rather than approximately 282,000, unless an additional operation is missing from the description.
-- **Output concentration has mathematical limits:** because each signed probability-shift vector sums to zero, \(D_{\text{output}}\le0.5\), and normalized \(H_{\text{output}}\ge\log 2/\log 10\approx0.301\) for nonzero effects. Interpret these metrics against those bounds.
-- **Threshold dose-response is an empirical question:** nested supports guarantee increasing support size, but deletion effects need not increase monotonically.
-- **“Favorable pilot” should become “feasibility pilot.”** Progression should depend on mechanics and computational feasibility. Pilot-driven changes should be documented, especially since the training smoke has already inspected test accuracy.
-- **Size matching controls unit count, not removed activation magnitude.** An activity-matched random sensitivity check would strengthen the interpretation if that difference appears substantial.
-
-For the six open decisions, my recommendations are:
-
-| Decision | Recommendation |
-|---|---|
-| TC/MI units | Bits, with the conversion documented |
-| Tie policy | Seeded neutral ordering; apply consistently to support construction too |
-| Tiny clusters | The proposed \(n<100\) exclusion is reasonable as a feasibility rule, with complete coverage reporting |
-| Probability storage | Class means, plus streamed individual-effect summaries |
-| Hidden-only scope | Acceptable at \(q=0.8\) with random controls |
-| MNIST location | Repository-relative `data/` is sensible |
-
-I have reviewed the methodology description, so the implementation’s equivalence tests, convergence behavior, and runtime claims remain unverified.
+The \(q=0.95/0.99\) extension can complement this, but increasing \(q\) mainly changes intervention size. At \(q=0.99\), inspect support density and overlap between factors: distinct factors may produce nearly identical large masks. The cluster and factor profiles are the analyses that directly answer your concern about what the current averages are hiding.

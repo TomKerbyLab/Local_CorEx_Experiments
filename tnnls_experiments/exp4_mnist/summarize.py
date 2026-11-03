@@ -238,6 +238,128 @@ def cutoff_sensitivity(abl: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def profile_cohort_summary(store, cluster_compositions: dict) -> pd.DataFrame:
+    """Feedback round 2, Phase C input: per-factor held-out cohort effects.
+
+    For every (seed, fit-cluster, layer, condition, factor): mean per-image
+    magnitude a(x) = 0.5||p^A - p^0||_1 and flip rate on three cohorts
+    defined from the profile grid + the fixed test-cluster assignment —
+    (1) OWN: images assigned to the factor's discovery cluster (all
+    classes); (2) SAME-DIGIT-OTHER: images of the discovery cluster's
+    dominant digit assigned to other clusters; (3) OTHER-DIGITS: the rest.
+    Averages are per image (mass never favors larger cohorts); cohort
+    sizes are reported; paired differences vs the matched random-mean
+    grid are computed cell-aligned before averaging (LC - random_mean on
+    identical cells). Exploratory analysis (results were already
+    examined).
+    """
+    prof = store.read_all("profiles")
+    if prof.empty:
+        return pd.DataFrame()
+    dom_digit = {int(c): int(np.argmax(v)) for c, v in
+                 cluster_compositions.items()}
+    key = ["model_seed", "cluster", "layer", "input_condition", "factor_index"]
+    rows = []
+    lc = prof[prof.method == "local_corex"]
+    rm = prof[prof.method == "random_mean"]
+    merged = lc.merge(rm, on=key + ["eval_cluster", "true_class"],
+                      suffixes=("_lc", "_rm"))
+    for _, fgrp in merged.groupby(key):
+        k = fgrp[key].iloc[0]
+        fit_c = int(k["cluster"])
+        dom_c = dom_digit[fit_c]
+        cell = fgrp.eval_cluster
+        cls = fgrp.true_class
+        own = (cell == fit_c)
+        sdo = (~own) & (cls == dom_c)
+        oth = (~own) & (cls != dom_c)
+        for name, mask in (("own_cluster", own),
+                           ("same_digit_other_clusters", sdo),
+                           ("other_digits", oth)):
+            g = fgrp[mask]
+            if g.empty:
+                continue
+            for stat, lc_col, rm_col in (("a_mean", "a_mean_lc", "a_mean_rm"),
+                                         ("flip_rate", "flip_rate_lc",
+                                          "flip_rate_rm")):
+                n = g.n_images_lc
+                rows.append({
+                    **{kk: k[kk] for kk in key},
+                    "cohort": name, "stat": stat,
+                    "lc": float((g[lc_col] * n).sum() / n.sum()),
+                    "random": float((g[rm_col] * n).sum() / n.sum()),
+                    "diff": float(((g[lc_col] - g[rm_col]) * n).sum()
+                                  / n.sum()),
+                    "n_images": int(n.sum()),
+                })
+    return pd.DataFrame(rows)
+
+
+def assoc_bits_column(factors: pd.DataFrame) -> pd.Series:
+    """Association strength of each factor: its dominant-class logit MI in
+    bits (NaN when the factor has no dominant logit)."""
+    import json as _json
+    import re as _re
+
+    def _bits(row):
+        d = row.get("dominant_logit")
+        if d is None or d < 0:
+            return np.nan
+        c = f"logit_mi_{int(d)}"
+        return float(row[c]) if c in row.index else np.nan
+
+    return factors.apply(_bits, axis=1)
+
+
+def profile_grid_summary(store) -> pd.DataFrame:
+    """Feedback round 2, Phase C input: the per-cell profile grids,
+    aggregated over the top-5 factors of each fit cluster and over seeds.
+
+    One row per (layer, fit cluster, input condition, eval cluster, true
+    class): n_images (identical across factors/seeds for a cell), and
+    equal-weight factor-mean LC and random-mean a_mean plus their
+    difference. (Top-5 equal-weight averaging is an exploratory summary
+    choice; per-factor views live in the notebook.)
+    """
+    prof = store.read_all("profiles")
+    if prof.empty:
+        return pd.DataFrame()
+    lc = prof[prof.method == "local_corex"].groupby(
+        ["layer", "cluster", "input_condition", "eval_cluster", "true_class"]
+    )[["a_mean", "n_images"]].mean().reset_index()
+    rm = prof[prof.method == "random_mean"].groupby(
+        ["layer", "cluster", "input_condition", "eval_cluster", "true_class"]
+    )["a_mean"].mean().reset_index().rename(columns={"a_mean": "random_mean"})
+    out = lc.merge(rm, on=["layer", "cluster", "input_condition",
+                           "eval_cluster", "true_class"], how="left")
+    out["diff"] = out["a_mean"] - out["random_mean"]
+    out = out.rename(columns={"a_mean": "lc_mean"})
+    # discovery-side association annotations per fit cluster (top-5 means):
+    # dominant-class MI in bits and the gap to the second class
+    factors = store.read_all("factors")
+    if not factors.empty:
+        fac = factors.copy()
+        fac["assoc_bits"] = assoc_bits_column(fac)
+        ann = fac.groupby(["layer", "input_condition", "cluster"]).agg(
+            assoc_bits_mean=("assoc_bits", "mean"),
+            gap_mean=("logit_mi_gap", "mean")).reset_index()
+        out = out.merge(ann, on=["layer", "input_condition", "cluster"],
+                        how="left")
+    return out
+
+
+def factor_assoc_table(factors: pd.DataFrame) -> pd.DataFrame:
+    """Compact per-factor association/structure table (Phase D input):
+    association strength (bits), gap, effective units, TC, source."""
+    fac = factors.copy()
+    fac["assoc_bits"] = assoc_bits_column(fac)
+    cols = ["model_seed", "cluster", "layer", "input_condition",
+            "factor_index", "factor_rank", "factor_tc", "dominant_logit",
+            "logit_mi_gap", "effective_n_units", "logit_mi_source",
+            "assoc_bits"]
+    return fac[[c for c in cols if c in fac.columns]]
+
+
 def coverage(abl: pd.DataFrame, factors: pd.DataFrame,
              cluster_sizes: dict | None = None) -> pd.DataFrame:
     """Coverage table: short factor retention and zero-effect interventions
@@ -338,6 +460,17 @@ def main() -> dict:
     out["coverage"] = coverage(
         abl, factors, cluster_sizes=_discovery_cluster_sizes(store))
     out["cutoff_sensitivity"] = cutoff_sensitivity(abl)
+    try:
+        clz = store.read_all("clusters")
+        comp = {int(c): np.bincount(g.astype(int), minlength=10)
+                for c, g in (clz.groupby("cluster")["true_label"]
+                             if "true_label" in clz.columns else [])}
+    except Exception:
+        comp = {}
+    if comp:
+        out["profile_cohorts"] = profile_cohort_summary(store, comp)
+        out["profile_grid"] = profile_grid_summary(store)
+        out["factor_assoc"] = factor_assoc_table(factors)
     # relationship table: TC, density, magnitude at factor level
     lc = abl[(abl["method"] == "local_corex")
              & (abl["input_condition"] == "output_aware")]

@@ -555,6 +555,46 @@ a knife-edge choice; activity-matched arm not triggered (Finding 1).
   factors' strongest logit association; by the §E3.9 restraint it remains
   an influence statement, not an interaction-type characterization.
 
+### E4.14.1 Exploratory extension (2026-11-03, feedback round 2 — label: exploratory)
+
+A second review pushed for factor heterogeneity and corrected the first
+in-cluster analysis: the dominant-digit-class cut measured the class view
+across the whole test set, the 0.86 "cluster-proportional null" conflated
+discovery-cluster purity with predicted effect-mass distribution (it is
+withdrawn), and the "factors spare their discovery cluster" reading is
+retracted. The coarse class-mass cut survives only as a descriptive
+distribution row (round-2 decision #9–15, §E4.15). The adopted analyses
+(assignment frozen per decision #11; machinery: `test_clusters` +
+`profiles` stages; validation tests) give, at q = 0.8
+(`profile_cohorts`, `profile_grid`, `factor_assoc`):
+
+1. **Per-image effects are digit-localized but not style-localized.**
+   Mean per-image excess magnitude (LC − matched-random): own cluster
+   0.036–0.047, same-digit-other-clusters 0.033–0.045 (within ~0.005 of
+   own, both conditions at every layer), other digits 0.007–0.009
+   (random: 0.002–0.007). Deleting a factor learned on one style of a
+   digit affects that digit's held-out images generally, not just its
+   discovery cohort. Flip rates follow the same ordering (own ≈ 3.0–3.6%,
+   same-digit-other ≈ 2.4–3.2%, other digits ≈ 0.2–0.8%).
+2. **The class-mass cut is reconciled, not contradicted.** On
+   cross-checked factors the per-image grids reproduce the class-mean
+   delta matrices exactly (max |ΔT_y| = 0.0000): the home digit's
+   per-image shifts cancel in the mean, so the class-mean shift mass
+   lands elsewhere — this is the aggregation profile-before-aggregate
+   was adopted for.
+3. **Discovery-side association strength prospectively predicts held-out
+   selectivity (exploratory).** Strata defined only from discovery fits:
+   Spearman(assoc bits, own-cohort excess diff) = 0.36 / 0.75 / 0.73 at
+   H1/H2/H3; association quartiles order the own-cohort diff monotonically
+   (e.g. H2: 0.0004 / 0.0198 / 0.0595 / 0.1003 from Q1 to Q4);
+   selectivity (own − other-digit) at 0.30 / 0.55 / 0.57.
+
+Display: `fig07_profile_heatmaps.png` (two aligned heatmaps: fit-cluster
+rows annotated with association strength; digit-class and held-out
+evaluation-cluster columns; cell = LC − matched-random excess per-image
+|Δ|, output-aware, top-5 fit-cluster mean over seeds; per-factor and
+per-seed views in the notebook).
+
 ## E4.15 Decision log (feedback of 2026-11-03 — all adopted)
 | # | Decision | Status |
 |---|---|---|

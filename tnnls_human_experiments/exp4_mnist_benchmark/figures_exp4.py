@@ -242,7 +242,68 @@ def fig06_effective_units():
     return _save(fig, "fig06_effective_units_by_layer.png")
 
 
-def main() -> list[Path]:
+def fig07_profile_heatmaps():
+    """Feedback round 2 Phase C: the review's two aligned heatmaps.
+
+    Rows = 20 fit clusters (y labels carry cluster id - top-5 mean
+    association strength in bits); panel A columns = 10 true-digit
+    classes, panel B columns = 20 evaluation clusters (held-out
+    assignment); cell = excess per-image magnitude (LC - matched-random
+    mean), averaged over the fit cluster's top-5 factors and the 5 model
+    seeds (panel per layer, output-aware, q = 0.8). Diverging
+    blue-red on the neutral surface; absent (cluster, class) pairs are
+    the muted gridline color. Claims stay influence-shaped per the
+    pre-registration; exploratory.
+    """
+    from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
+
+    g = _load("profile_grid")
+    oa = g[g.input_condition == "output_aware"]
+    vmax = float(np.nanpercentile(np.abs(oa["diff"]), 98))
+    cmap = LinearSegmentedColormap.from_list(
+        "div", ["#2a78d6", "#f0efec", "#e34948"])
+    cmap.set_bad("#e1e0d9")
+    norm = TwoSlopeNorm(vmin=-vmax, vcenter=0.0, vmax=vmax)
+    fig, axes = plt.subplots(
+        3, 2, figsize=(11.6, 8.2),
+        gridspec_kw={"wspace": 0.22, "hspace": 0.35})
+    for i, layer in enumerate(LAYERS):
+        sub = oa[oa.layer == layer]
+        md = sub.pivot_table(index="cluster", columns="true_class",
+                             values="diff")
+        me = sub.pivot_table(index="cluster", columns="eval_cluster",
+                             values="diff")
+        ann = (sub[["cluster", "assoc_bits_mean"]].drop_duplicates()
+               .set_index("cluster")).reindex(md.index)
+        ylabels = [f"{int(cl)} - {v:.2f}" for cl, v in ann.assoc_bits_mean.items()]
+        for ax, M, xlab in ((axes[i, 0], md, "true digit"),
+                            (axes[i, 1], me, "evaluation cluster")):
+            im = ax.imshow(M.to_numpy(), cmap=cmap, norm=norm,
+                           aspect="auto", interpolation="nearest")
+            ax.set_xticks(range(M.shape[1]))
+            ax.set_xticklabels(M.columns, fontsize=6.5)
+            ax.grid(False)
+            if i == 0:
+                ax.set_title(xlab, color=INK, fontsize=9.5, loc="left")
+            if i == 2:
+                ax.set_xlabel(xlab, color=INK)
+        axes[i, 0].set_yticks(range(20))
+        axes[i, 0].set_yticklabels(ylabels, fontsize=6.5)
+        axes[i, 0].set_ylabel(LAYER_NAMES[layer], color=INK, fontsize=9)
+    cbar = fig.colorbar(im, ax=axes.ravel().tolist(), fraction=0.015,
+                        pad=0.02)
+    cbar.set_label("excess per-image |delta| (LC - random)", color=INK,
+                   fontsize=8.5)
+    cbar.ax.tick_params(labelsize=7)
+    fig.suptitle(
+        "Factor profiles (exploratory): which images does deleting a "
+        "factor's support affect?  (output-aware, q=0.8)", x=0.055,
+        ha="left", fontsize=11.5, color=INK)
+    fig.tight_layout(rect=(0, 0.005, 1, 0.955))
+    return _save(fig, "fig07_profile_heatmaps.png")
+
+
+def main() -> list:
     _rc()
     return [
         fig01_prevalence(),
@@ -251,6 +312,7 @@ def main() -> list[Path]:
         fig04_concordance(),
         fig05_tc_magnitude(),
         fig06_effective_units(),
+        fig07_profile_heatmaps(),
     ]
 
 

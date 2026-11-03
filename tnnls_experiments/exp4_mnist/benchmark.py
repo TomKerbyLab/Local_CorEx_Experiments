@@ -61,6 +61,7 @@ HIDDEN_ONLY_FRACTION = 0.80
 MODEL_SEEDS = (5100, 5101, 5102, 5103, 5104)
 LAYERS = (1, 2, 3)
 VAR_FLOOR = 1e-12
+N_CLASSES = 10  # ten MNIST output classes (matches interventions.N_CLASSES)
 NATS_TO_BITS = 1.0 / np.log(2.0)  # Linear CorEx reports TC/MI in nats
 # Tiny-cluster rule (pre-registered §E4.4, decision 3): discovery clusters
 # with fewer observations are recorded and excluded from the intervention
@@ -717,6 +718,167 @@ def run_ablation_stage(model_seed, splits, labels_cluster, model, device,
 
 
 # ---------------------------------------------------------------------------
+# Stage: per-factor behavioral profiles (feedback round 2, Phase B)
+# ---------------------------------------------------------------------------
+
+PROFILES_THRESHOLD = 0.80
+
+
+def _accumulate_profile(p_abl, p_base, y, test_cluster):
+    """Vectorized per-image aggregation into the (20 x 10) profile grid.
+
+    Per image: a(x) = 0.5*||p_abl - p0||_1; argmax flip; signed prob
+    difference. Returns (a_sum, flip_sum, shift_sum, cell_counts) over
+    group ids g = eval_cluster*10 + true_class in [0, 200).
+    """
+    d_p = p_abl - p_base
+    a = np.abs(d_p).sum(axis=1) / 2.0
+    flip = (p_abl.argmax(1) != p_base.argmax(1)).astype(float)
+    g = test_cluster * N_CLASSES + y
+    counts = np.bincount(g, minlength=200).astype(float)
+    a_sum = np.bincount(g, weights=a, minlength=200)
+    flip_sum = np.bincount(g, weights=flip, minlength=200)
+    shift_sum = np.stack(
+        [np.bincount(g, weights=d_p[:, c], minlength=200)
+         for c in range(N_CLASSES)], axis=1)
+    return a_sum, flip_sum, shift_sum, counts
+
+
+def _grid_rows_from_sums(a_sum, flip_sum, shift_sum, counts):
+    """Materialize grid cell rows (empty cells skipped) from accumulators."""
+    rows = []
+    for ec in range(20):
+        for cls in range(N_CLASSES):
+            cell = ec * N_CLASSES + cls
+            if counts[cell] == 0:
+                continue
+            rows.append({
+                "eval_cluster": ec, "true_class": cls,
+                "n_images": int(counts[cell]),
+                "a_mean": float(a_sum[cell] / counts[cell]),
+                "flip_rate": float(flip_sum[cell] / counts[cell]),
+                "signed_shift": json.dumps(
+                    np.round(shift_sum[cell] / counts[cell], 6).tolist()),
+            })
+    return rows
+
+
+def run_profiles_stage(model_seed, splits, labels_cluster, test_cluster,
+                       model, device, store, cfg) -> None:
+    """Per-factor behavioral profiles at q = 0.80, BOTH input conditions
+    (feedback round 2, Phase B; exploratory machinery).
+
+    For every (cluster, layer, input_condition) fit condition, rerun the
+    Local CorEx intervention and its matched random controls (the derived
+    seeds reproduce identical masks) while accumulating per-image effects
+    into the (eval-cluster x true-class) grid. The shard stores, per
+    factor: the LC grid and the random-draw-MEAN grid; per-draw grids are
+    not stored. Factors are profiled before any aggregate is formed.
+    """
+    labels_test = splits["test_y"].numpy()
+    x_disc = splits["discovery_x"]
+    trunk = TrunkEvaluator(model, splits["test_x"], device)
+    p_base = trunk.baseline_probs
+    for cluster in range(int(cfg["n_clusters"])):
+        idx = np.flatnonzero(labels_cluster == cluster)
+        if len(idx) < MIN_CLUSTER_OBS:
+            continue
+        xc = x_disc[torch.tensor(idx)]
+        h1, h2, h3, logits_disc = extract_representations(model, xc, device)
+        logits_disc = center_logits(logits_disc)
+        for layer in cfg["layers"]:
+            H = {1: h1, 2: h2, 3: h3}[layer]
+            H_std, valid_h, _ = standardize_with_flags(H)
+            for cond_name in cfg["input_conditions"]:
+                fcond = factor_condition(model_seed, cluster, layer, cond_name)
+                if not store.is_done(fcond, ("factors", "supports")):
+                    continue
+                pcond = {"stage": "profiles", "model_seed": model_seed,
+                         "cluster": cluster, "layer": layer,
+                         "input_condition": cond_name}
+                if store.is_done(pcond, ("profiles",)):
+                    continue
+                fdf = pd.read_parquet(store.shard_path(fcond, "factors"))
+                sups_df = pd.read_parquet(store.shard_path(fcond, "supports"))
+                valid_idx = np.flatnonzero(valid_h)
+                cell_counts = np.bincount(
+                    test_cluster * N_CLASSES + labels_test,
+                    minlength=200).astype(float)
+                rows: list[dict] = []
+                for _, frow in fdf.iterrows():
+                    fi = int(frow["factor_index"])
+                    dominant = frow.get("dominant_logit", -1)
+                    dominant = (None if (dominant is None or dominant < 0)
+                                else int(dominant))
+                    sub = sups_df[(sups_df["factor_index"] == fi)
+                                  & (sups_df["threshold"] == PROFILES_THRESHOLD)]
+                    sup = sub.sort_values("mi_rank")["hidden_unit"].tolist()
+                    if not sup:
+                        continue  # empty/degenerate support: no profile
+                    s = len(sup)
+                    base_int = {
+                        "model_seed": model_seed, "cluster": cluster,
+                        "layer": layer, "input_condition": cond_name,
+                        "factor_index": fi,
+                        "factor_rank": int(frow["factor_rank"]),
+                        "threshold": float(PROFILES_THRESHOLD),
+                        "dominant_logit": (dominant if dominant is not None
+                                           else -1),
+                        "support_size": s,
+                    }
+                    # LC grid
+                    p_abl = trunk.ablated_probs(layer, sup)
+                    a_sum, f_sum, s_sum, _ = _accumulate_profile(
+                        p_abl, p_base, labels_test, test_cluster)
+                    lc_cells = _grid_rows_from_sums(
+                        a_sum, f_sum, s_sum, cell_counts)
+                    # matched random grids (mean over draws, same seeds)
+                    n_controls = (int(cfg["n_random_controls_hidden_only"])
+                                  if cond_name == "hidden_only"
+                                  else int(cfg["n_random_controls"]))
+                    ra = np.zeros(200)
+                    rf = np.zeros(200)
+                    rs = np.zeros((200, N_CLASSES))
+                    for draw in range(n_controls):
+                        s_rand = seeds.derive_seed(
+                            model_seed, "random_ablation", cluster, layer,
+                            fi, PROFILES_THRESHOLD, draw)
+                        rng = np.random.default_rng(s_rand)
+                        rand_sup = rng.choice(valid_idx, size=s,
+                                              replace=False).tolist()
+                        a_r, f_r, s_r, _ = _accumulate_profile(
+                            trunk.ablated_probs(layer, rand_sup), p_base,
+                            labels_test, test_cluster)
+                        ra += a_r
+                        rf += f_r
+                        rs += s_r
+                    rand_cells = [
+                        {"eval_cluster": cell["eval_cluster"],
+                         "true_class": cell["true_class"],
+                         "n_images": cell["n_images"],
+                         "a_mean": float(
+                             ra[key] / (n_controls * cell["n_images"])),
+                         "flip_rate": float(
+                             rf[key] / (n_controls * cell["n_images"])),
+                         "signed_shift": json.dumps(np.round(
+                             rs[key] / (n_controls * cell["n_images"]),
+                             6).tolist())}
+                        for cell in lc_cells
+                        for key in (cell["eval_cluster"] * N_CLASSES
+                                    + cell["true_class"],)]
+                    for method, cells, draw in (
+                            ("local_corex", lc_cells, 0),
+                            ("random_mean", rand_cells, -1)):
+                        for cell in cells:
+                            rows.append({**base_int, "method": method,
+                                         "random_draw": draw, **cell})
+                store.write(pcond, "profiles", rows)
+                logger.info("profiles: seed %s cluster %s layer %d %s: "
+                            "%d rows", model_seed, cluster, layer, cond_name,
+                            len(rows))
+
+
+# ---------------------------------------------------------------------------
 # Probability-shift storage (large; per intervention 100 rows)
 # ---------------------------------------------------------------------------
 
@@ -793,9 +955,11 @@ def main(cfg: dict, stages: tuple[str, ...] = ("clusters", "fits", "ablations"))
         z = pd.read_parquet(store.shard_path(cond, "clusters"))
         labels_cluster = z.set_index("discovery_index")["cluster"].sort_index().to_numpy()
 
-    if "test_clusters" in stages:
-        build_test_cluster_assignment(splits, store,
-                                      int(defaults["n_clusters"]))
+    if "test_clusters" in stages or "profiles" in stages:
+        labels_test_cluster = build_test_cluster_assignment(
+            splits, store, int(defaults["n_clusters"]))
+    else:
+        labels_test_cluster = None
 
     summary = {}
     for model_seed in defaults["model_seeds"]:
@@ -812,6 +976,10 @@ def main(cfg: dict, stages: tuple[str, ...] = ("clusters", "fits", "ablations"))
         if "ablations" in stages:
             run_ablation_stage(model_seed, splits, labels_cluster, model,
                                device, store, defaults)
+        if "profiles" in stages:
+            run_profiles_stage(model_seed, splits, labels_cluster,
+                               labels_test_cluster, model, device, store,
+                               defaults)
         if "shifts" in stages:
             write_probability_shifts(model_seed, store, defaults)
         summary[model_seed] = time.time() - t0
