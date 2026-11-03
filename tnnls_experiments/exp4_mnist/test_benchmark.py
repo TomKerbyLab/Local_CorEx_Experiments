@@ -258,6 +258,25 @@ def test_assignment_checks_synthetic():
     assert dist.shape == (150, 1) and ind.shape == (150, 1)
 
 
+def test_reconstruct_supports_at():
+    # Extension supports: rebuilt from a stored MI vector with the same
+    # neutral-tie machinery; zero-MI coordinates never selected; extension
+    # thresholds nest with the primary ones (verified against q=0.9 built
+    # the same way).
+    rng = np.random.default_rng(0)
+    scores = np.abs(rng.normal(size=100))
+    scores[7] = 0.0                      # excluded coordinate (zero-MI)
+    valid_from_mi = scores != 0.0
+    from tnnls_experiments.exp4_mnist.benchmark import reconstruct_supports_at
+    ext = reconstruct_supports_at(scores, valid_from_mi, [0.95, 0.99], 123)
+    prim = reconstruct_supports_at(scores, valid_from_mi, [0.9], 123)
+    assert all(7 not in s.indices for s in ext + prim)
+    assert set(prim[0].indices) <= set(ext[0].indices) <= set(ext[1].indices)
+    assert ext[0].size <= ext[1].size
+    assert np.allclose(ext[1].scores,
+                       [scores[i] for i in ext[1].indices])
+
+
 def test_profiles_stage_machinery(tmp_path, monkeypatch):
     # Profile grids: LC + random_mean per factor, 200 cells, valid stats;
     # random-mean magnitudes are near the per-image null level.

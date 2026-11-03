@@ -595,6 +595,45 @@ evaluation-cluster columns; cell = LC − matched-random excess per-image
 |Δ|, output-aware, top-5 fit-cluster mean over seeds; per-factor and
 per-seed views in the notebook).
 
+### E4.14.2 Supplementary threshold extension q ∈ {0.95, 0.99} (executed 2026-11-03; exploratory)
+
+Executed per decision #14 (no q = 1.0: with nonnegative association
+scores the support degenerates to the whole layer). Output-aware only;
+supports reconstructed from the stored per-factor hidden-MI vectors with
+the primary stage's machinery (documented approximation: vectors are
+rounded to 6 decimals at the fit boundary; validity reconstructed as
+"MI ≠ 0", which logs zero-MI-valid-unit mismatches in 1,158 of 6,000
+factor rows, shifting the matched-random pool by at most a few units);
+the frozen evaluator then ran to a separate store table — the primary
+shards were never recomputed. 66,000 new rows (per factor-threshold: 1 LC + 20
+random + 1 univariate; 1,500 factor conditions × 2 thresholds × 22 =
+3,000 LC + 60,000 random + 3,000 univariate); zero zero-effect; wall ≈
+13.5 min.
+
+1. **Effects keep climbing steeply through q = 0.95** — mean T_max by
+   layer at q = 0.95: 0.215 / 0.250 / 0.254 (H1/H2/H3; from 0.113 / 0.171
+   / 0.155 at q = 0.9) — and prevalence peaks at 0.422 (H2) / 0.382 (H3)
+   at q = 0.95 with specificity intact (H_input 0.53 / 0.57). The
+   response is NOT saturating at 0.9.
+2. **At q = 0.99 specificity collapses — the anticipated trade-off
+   finally appears.** T_max still rises (0.45–0.53) but H_input goes back
+   up (H2 0.57, H3 0.67, H1 0.80) and prevalence *falls* (H2 0.346, H3
+   0.150, H1 0.000). The mechanism is visible in the supports:
+   density jumps 0.37 → 0.52 (support ≈ 139 → 206 units) — heavy weak-MI
+   tails — and **distinct factors' supports overlap heavily at q = 0.99:
+   cross-factor Jaccard median 0.38 (p90 0.53)** (per the review's
+   prediction: near-complete supports are near-identical large masks,
+   making the deletion less factor-specific). Self-Jaccard of a factor's
+   0.95/0.99 supports: median 0.64.
+3. **Univariate contrast consistent with the primary grid:** LC clearly
+   better than the univariate control at H3 (ΔT_max +0.049–0.070,
+   ΔH_input +0.048–0.110), tied or univariate-slightly-better at H2
+   (−0.025–−0.031/±0.01), tied at H1.
+
+Readout: the operational sweet spot is q ≈ 0.9–0.95; q = 0.99 measures
+the "whole-factor deletion" neighborhood rather than a factor-specific
+intervention. Diagnostics in `results/extension_support_diag.csv`.
+
 ## E4.15 Decision log (feedback of 2026-11-03 — all adopted)
 | # | Decision | Status |
 |---|---|---|

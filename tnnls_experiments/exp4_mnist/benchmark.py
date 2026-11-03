@@ -596,15 +596,21 @@ def run_ablation_stage_for_factor(
     model_seed, cluster, layer, input_condition, factor_index, factor_rank,
     supports, H_disc, logits_disc, valid_h, dominant_logit,
     trunk: TrunkEvaluator, labels_test, store, cfg,
+    table_name: str = "ablation_summary",
 ) -> None:
     """Evaluate LC + random + univariate interventions for one factor.
 
     supports: dict threshold -> ordered support indices (nested by construction).
+    table_name: the store table for the result rows; the supplementary
+    threshold extension writes to its own table so the primary shards are
+    never overwritten.
     """
-    acond = {"stage": "ablation", "model_seed": model_seed, "cluster": cluster,
-             "layer": layer, "input_condition": input_condition,
+    acond = {"stage": "ablation" if table_name == "ablation_summary"
+             else "extension", "model_seed": model_seed,
+             "cluster": cluster, "layer": layer,
+             "input_condition": input_condition,
              "factor_index": factor_index}
-    if store.is_done(acond, ("ablation_summary",)):
+    if store.is_done(acond, (table_name,)):
         return
     n_controls = (int(cfg["n_random_controls_hidden_only"])
                   if input_condition == "hidden_only"
@@ -664,7 +670,7 @@ def run_ablation_stage_for_factor(
                 labels_test, dominant_logit,
                 removed_act_mag=trunk.mean_removed_activation(layer, uni))
             rows.append(row_u)
-    store.write(acond, "ablation_summary", rows)
+    store.write(acond, table_name, rows)
 
 
 def run_ablation_stage(model_seed, splits, labels_cluster, model, device,
@@ -879,6 +885,88 @@ def run_profiles_stage(model_seed, splits, labels_cluster, test_cluster,
 
 
 # ---------------------------------------------------------------------------
+# Supplementary stage: threshold extension q in {0.95, 0.99} (decision #14)
+# ---------------------------------------------------------------------------
+
+SUPPORT_EXTENSIONS = (0.95, 0.99)
+
+
+def reconstruct_supports_at(hmi: np.ndarray, valid_from_mi: np.ndarray,
+                            thresholds, s_tie: int) -> list:
+    """Rebuild cumulative-MI supports at EXTENSION thresholds from a
+    factor's stored hidden-MI vector (rounded to 6 decimals at the fit
+    boundary — a documented approximation of the fit-time vector),
+    applying the same neutral-tie machinery as the primary stage."""
+    perm = np.random.default_rng(int(s_tie)).permutation(len(hmi))
+    sups_p = metrics.nested_supports(hmi[perm], list(thresholds),
+                                     valid_from_mi[perm])
+    sups = []
+    for sup in sups_p:
+        sup.indices = [int(perm[i]) for i in sup.indices]
+        sup.scores = [float(hmi[i]) for i in sup.indices]
+        sups.append(sup)
+    return sups
+
+
+def run_ablation_extension_stage(model_seed, splits, labels_cluster, model,
+                                 device, store, cfg) -> None:
+    """Supplementary interventions at q in {0.95, 0.99}, OUTPUT-AWARE only
+    (the hidden-only arm stays at its frozen q = 0.80 scope).
+
+    Reconstructs the extension supports from the stored per-factor
+    hidden-MI vectors of the existing fits (the primary thresholds' rows
+    are never recomputed), then calls the frozen intervention evaluator.
+    Conditions whose fit shard is missing are skipped. Validity flags are
+    reconstructed as (hidden-MI vector != 0); a validity count mismatch
+    against the stored n_valid_hidden is logged (a zero-MI valid unit in
+    the original fit would shift the random-control pool by at most one).
+    """
+    labels_test = splits["test_y"].numpy()
+    x_disc = splits["discovery_x"]
+    trunk = TrunkEvaluator(model, splits["test_x"], device)
+    for cluster in range(int(cfg["n_clusters"])):
+        idx = np.flatnonzero(labels_cluster == cluster)
+        if len(idx) < MIN_CLUSTER_OBS:
+            continue
+        xc = x_disc[torch.tensor(idx)]
+        h1, h2, h3, logits_disc = extract_representations(model, xc, device)
+        logits_disc = center_logits(logits_disc)
+        for layer in cfg["layers"]:
+            H = {1: h1, 2: h2, 3: h3}[layer]
+            H_std, _, _ = standardize_with_flags(H)
+            fcond = factor_condition(model_seed, cluster, layer,
+                                     "output_aware")
+            if not store.is_done(fcond, ("factors", "supports")):
+                continue
+            fdf = pd.read_parquet(store.shard_path(fcond, "factors"))
+            for _, frow in fdf.iterrows():
+                fi = int(frow["factor_index"])
+                hmi = np.array(json.loads(frow["hidden_mi_vector"]))
+                valid_h = hmi != 0.0
+                n_rec = int(valid_h.sum())
+                if n_rec != int(frow["n_valid_hidden"]):
+                    logger.info("seed %s cluster %s layer %d factor %d: "
+                                "validity reconstruction %d != stored %d "
+                                "(zero-MI valid units present)",
+                                model_seed, cluster, layer, fi, n_rec,
+                                int(frow["n_valid_hidden"]))
+                s_tie = seeds.derive_seed(int(frow["corex_seed"]),
+                                          "support_ties")
+                sups = {q: sup.indices for q, sup in zip(
+                    SUPPORT_EXTENSIONS,
+                    reconstruct_supports_at(hmi, valid_h,
+                                            SUPPORT_EXTENSIONS, s_tie))}
+                dominant = frow.get("dominant_logit", -1)
+                dominant = (None if (dominant is None or dominant < 0)
+                            else int(dominant))
+                run_ablation_stage_for_factor(
+                    model_seed, cluster, layer, "output_aware", fi,
+                    int(frow["factor_rank"]), sups, H_std, logits_disc,
+                    valid_h, dominant, trunk, labels_test, store, cfg,
+                    table_name="extension_summary")
+
+
+# ---------------------------------------------------------------------------
 # Probability-shift storage (large; per intervention 100 rows)
 # ---------------------------------------------------------------------------
 
@@ -976,6 +1064,9 @@ def main(cfg: dict, stages: tuple[str, ...] = ("clusters", "fits", "ablations"))
         if "ablations" in stages:
             run_ablation_stage(model_seed, splits, labels_cluster, model,
                                device, store, defaults)
+        if "extensions" in stages:
+            run_ablation_extension_stage(model_seed, splits, labels_cluster,
+                                         model, device, store, defaults)
         if "profiles" in stages:
             run_profiles_stage(model_seed, splits, labels_cluster,
                                labels_test_cluster, model, device, store,
