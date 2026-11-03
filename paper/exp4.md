@@ -441,6 +441,21 @@ supported Reading 6 is stated as directional influence, nothing more.
   rates: ≈ 1.5–2 GPU-hours serial for the 141k-evaluation grid, plus
   ~5 min for the three remaining model trainings**; then the full grid
   behind the user's GO.
+- **Full grid executed (2026-11-03, user GO):** all five model seeds
+  trained first (best-epoch test accuracies 0.9864 / 0.9860 / 0.9864 /
+  0.9863 / 0.9862 — every seed above the 97% flag threshold, zero flags);
+  the store was started clean (the pilot's single-threshold supports
+  could not be resumed into the four-threshold grid without the
+  audit-known config-mismatch hazard; pilot shards kept at
+  `outputs/raw/mnist_pilot_2seed_q08`); **600/600 fit conditions with 5
+  factors each (no shortfalls), zero nonconverged fits, 141,000/141,000
+  intervention evaluations (6,000 LC output-aware + 127,500 random +
+  6,000 univariate + 1,500 LC hidden-only + 7,500 random), zero
+  zero-effect rows, no tiny-cluster exclusions, and five per-seed
+  probability-shift parquets of 2.82M rows each** (14.1M total). Wall
+  time ~49 min (≈585 s per seed). All seven primary summary tables (plus
+  coverage, effective-units, and TC-magnitude) regenerate from the
+  shipped shards; results in §E4.14.
 
 ## E4.14 Results
 
