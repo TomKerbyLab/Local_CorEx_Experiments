@@ -29,10 +29,13 @@ N_CLUSTERS = 20
 T_CRIT = {25: 2.060, 30: 2.042, 40: 2.023, 50: 2.009, 60: 2.000, 100: 1.984}
 
 
-def _t_crit(df):
-    n = max(len(df), 2)
-    key = min(T_CRIT, key=lambda k: abs(k - n)) if n > 25 else 2.060
-    return T_CRIT.get(key, 2.060) if n >= 25 else 2.069
+def _t_crit(n: int) -> float:
+    """Nearest tabulated t critical value (0.975) at or below n, from the
+    t(15) fallback for anything smaller."""
+    if n < 25:
+        return 2.060  # t(n=25) used as the conservative fallback
+    key = max(k for k in T_CRIT if k <= n) if any(k <= n for k in T_CRIT) else 25
+    return T_CRIT[key]
 
 
 def spatial_metrics(cluster_tv_json: str) -> dict:
@@ -51,14 +54,24 @@ def _expand(df: pd.DataFrame) -> pd.DataFrame:
     return pd.concat([df.reset_index(drop=True), sp], axis=1)
 
 
+KEYS = ["model_seed", "input_condition", "layer", "budget", "factor_rank",
+        "threshold", "method", "random_draw"]
+
+METRICS = ["T_max", "H_input", "accuracy_change"]
+
+
 def paired_contrasts(store: ResultStore) -> pd.DataFrame:
     tv = store.read_all("global_cluster_tv")
-    tv = _expand(tv)
-    rng = tv[tv.method == "random"].groupby(
+    if tv.empty:
+        return pd.DataFrame()
+    ab = store.read_all("global_ablation")
+    joined = tv.merge(ab[KEYS + METRICS], on=KEYS, how="outer")
+    joined = _expand(joined)
+    rng = joined[joined.method == "random"].groupby(
         ["model_seed", "input_condition", "layer", "budget", "factor_rank",
-         "threshold"]) [["T_max", "H_input", "accuracy_change", "tv_entropy",
-                         "tv_dominant_frac"]].mean().reset_index()
-    lc = tv[tv.method == "global_corex"]
+         "threshold"])[METRICS + ["tv_entropy", "tv_dominant_frac"]] \
+        .mean().reset_index()
+    lc = joined[joined.method == "global_corex"]
     p = lc.merge(rng, on=["model_seed", "input_condition", "layer", "budget",
                           "factor_rank", "threshold"],
                  suffixes=("", "_rand"))
@@ -90,7 +103,9 @@ def paired_contrasts(store: ResultStore) -> pd.DataFrame:
 
 def levels(store: ResultStore) -> pd.DataFrame:
     tv = store.read_all("global_cluster_tv")
-    tv = _expand(tv)
+    ab = store.read_all("global_ablation")
+    joined = tv.merge(ab[KEYS + METRICS], on=KEYS, how="outer")
+    tv = _expand(joined)
     lv = tv.groupby(["method", "input_condition", "layer", "budget",
                      "threshold"]).agg(
         T_max=("T_max", "mean"), H_input=("H_input", "mean"),
@@ -105,13 +120,13 @@ def levels(store: ResultStore) -> pd.DataFrame:
 
 def coverage(store: ResultStore) -> pd.DataFrame:
     fac = store.read_all("global_factors")
-    cov = fac.groupby(["input_condition", "layer", "budget"]).agg(
-        n_factors=("factor_rank", "size"),
-        n_seeds=fac.model_seed.nunique,
-        converged_frac=("corex_converged", "mean"),
-        mean_tc=("factor_tc", "mean"),
-        mean_runtime_s=("corex_runtime_s", "mean"),
-    ).reset_index()
+    cov = (fac.groupby(["input_condition", "layer", "budget"])
+           .agg(n_factors=("factor_rank", "size"),
+                n_seeds=("model_seed", "nunique"),
+                converged_frac=("corex_converged", "mean"),
+                mean_tc=("factor_tc", "mean"),
+                mean_runtime_s=("corex_runtime_s", "mean"))
+           .reset_index())
     sv = store.read_all("global_supports")
     sv = sv.groupby(["input_condition", "layer", "budget",
                      "threshold"]).support_size.agg(
