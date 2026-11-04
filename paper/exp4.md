@@ -465,6 +465,41 @@ supported Reading 6 is stated as directional influence, nothing more.
   notebook `analysis_exp4_results.ipynb` (results-only dependencies) is
   executed and committed. The qualitative reconstruction panel (§spec,
   predeclared cluster rule, seed 5100) remains the one pending display.
+- **Qualitative panel executed (2026-11-03):** the predeclared rule selects
+  cluster 0 (the 4/9-mixed cluster, min(n₄, n₉) = 213); per layer the
+  retained factor (seed 5100) with the largest max{I(Z;L₄), I(Z;L₉)} =
+  0.17 / 0.86 / 0.78 bits; the panel decodes symmetric factor-score
+  perturbations (±1σ, ±2σ) of a fixed held-out cohort image through a
+  **mirror autoencoder** — encoder = the frozen trained classifier, decoder
+  = a mirror MLP trained for 18 s on the 45k training pixels (test
+  reconstruction MSE 0.0215; the legacy program's `build_decoder_from_
+  classifier` + AE mechanism, self-contained). The perturbations morph the
+  decoded digit visibly along the factor direction (e.g. the H3 row slides
+  cleanly between 4- and 9-like forms); the panel is explanatory and
+  never participates in factor selection. Committed as
+  `figures/exp4_qualitative_reconstruction_panel.png`
+  (`decode_panel.py`, `train_mirror_ae.py`).
+- **Human-pipeline port complete (2026-11-03):**
+  `tnnls_human_experiments/exp4_mnist_benchmark/` is now the run target in
+  the house pattern (flat self-contained modules, local `common/`,
+  package-local regenerable `run_results/`); the reference implementation
+  stays as the spec record of the executed runs, and the port folds in the
+  audit's remaining items: the stage-aware completeness gate (new stages
+  can run after the main grid; hollow-run guard — the bare gate had
+  blocked the profiles/extensions stages entirely), the repository-
+  relative MNIST root under `data/` (decision #6), the `mnist_models`
+  store table, and the duplicate-`load_splits` removal; the missing
+  validation test 14 (resumed runs regenerate identical random masks) is
+  now asserted. Port verified: 36/36 tests and a `--smoke` end-to-end run
+  into its own outputs.
+- **Simplification pass (2026-11-03):** dead machinery removed from the
+  port (`evaluate_intervention` — the unused pre-trunk canonical path —
+  `sensitivity_table` (superseded by `cutoff_sensitivity` in the
+  summarizer), the one-line `concordance` helper, and unused imports);
+  `tc_magnitude_relationship`'s unused `sup` argument dropped. Larger
+  refactors (a shared per-(seed, cluster, layer) context for the four
+  stage loops; a single-pass probability-shift expander) are identified
+  as future cleanup and not applied to the executed machinery.
 
 ## E4.14 Results
 

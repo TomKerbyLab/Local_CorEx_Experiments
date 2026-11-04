@@ -1,48 +1,71 @@
-# Experiment 4: MNIST factor-ablation benchmark — results record
+# Experiment 4: MNIST factor-ablation benchmark — human-pipeline port + results record
 
 Motivation, pre-registered methodology, decision log, and results live in
-[`../../paper/exp4.md`](../../paper/exp4.md) (§E4.1–§E4.15). The reference
-implementation and run target is `../../tnnls_experiments/exp4_mnist/`; this
-directory preserves the **executed full grid's outputs** (the raw shard
-directory `outputs/raw/mnist/` is regenerable and not tracked) and renders
-the predeclared display set. The runnable package port (house-style runner)
-may follow; the reference implementation + committed results is the run
-record.
+[`../../paper/exp4.md`](../../paper/exp4.md) (§E4.1–§E4.15).
 
-## Executed run (2026-11-03)
+**This directory is now the run target**: a self-contained port (the
+house pattern of `../exp3_redundancy/`) — flat modules, a local
+`common/` subpackage, package-local regenerable outputs
+(`run_results/`), and the committed record in `results/` + `figures/`.
+The reference implementation `tnnls_experiments/exp4_mnist/` stays as
+the spec record of the executed runs (see §E4.13).
 
-- Command: `python -m tnnls_experiments.exp4_mnist.train --seeds 5100..5104`,
-  then `python -m tnnls_experiments.exp4_mnist.benchmark --config
-  tnnls_experiments/configs/exp4_full.yaml --stages clusters,fits,ablations,shifts`.
-- Grid: 5 seeds × 20 PHATE/k-means clusters (k=20, seeds 5200/5201) ×
-  layers H1/H2/H3 × top-5 factors × q ∈ {0.6, 0.7, 0.8, 0.9}
-  (output-aware) + q = 0.80 (hidden-only, 5 random controls).
-- Outcome: **600/600 fits** (5 factors each, all converged, no shortfalls),
-  **141,000/141,000 interventions** (7,500 LC + 127,500 random + 6,000
-  univariate), zero zero-effect rows, no tiny-cluster exclusions, five
-  probability-shift parquets (2.82M rows each). Wall ≈ 49 min.
-- Run id `mnist.3d97ba99ce.0` (`results/full_run_report.txt`,
-  `results/full_run_resolved_config.json`); a 2-seed q=0.8 feasibility
-  pilot preceded the grid (shards preserved untracked under
-  `outputs/raw/mnist_pilot_2seed_q08/`).
+## Port fixes folded in (per paper/exp4.md §E4.14/§E4.15)
+
+- stage-aware completeness gate (`is_complete_for_stages` + stage-union
+  markers, hollow-run guard): new stages can run after the main grid;
+- MNIST under the repository-relative `data/mnist_classifier/`
+  (decision #6; no cwd-relative downloads);
+- the spec's `mnist_models` store table (one row per trained seed);
+- the duplicated `load_splits` definition removed (audit item 5).
+
+## Executed runs (2026-11-03)
+
+- **Full grid on the reference implementation** (record + CSVs in
+  `results/`): run id `mnist.3d97ba99ce.0`;
+  5 seeds × 20 PHATE clusters (k=20, seeds 5200/5201) × layers H1–H3 ×
+  top-5 factors × q ∈ {0.6,0.7,0.8,0.9} output-aware + q=0.80
+  hidden-only; **600/600 fits, 141,000/141,000 interventions, zero
+  failures, zero exclusions**; five per-seed probability-shift parquets
+  (14.1M rows); ~49 min wall. §E4.14 = the pre-registered findings;
+  §E4.14.1/§E4.14.2 = the exploratory profile and q-extension sections.
+- **Extensions (also on the reference):** test-cluster assignment
+  (checks 0.975/0.966; note the PHATE out-of-sample transform is
+  thread-nondeterministic — rates vary a few % between runs, both
+  passes); per-factor profile grids (768k cells); q = 0.95/0.99
+  supplementary (66k rows; specificity collapse at 0.99 documented with
+  support-overlap diagnostics).
+- **Panel:** `figures/exp4_qualitative_reconstruction_panel.png` — the
+  predeclared qualitative reconstruction (cluster maximizing
+  min(n₄,n₉) = cluster 0; factor per layer by max{I(Z;L₄), I(Z;L₉)};
+  factor-score-directed symmetric perturbations decoded through the
+  mirror autoencoder (`train_mirror_ae.py`, test recon MSE 0.0215);
+  explanatory only — never factor selection.
 
 ## Layout
 
 | Path | Role |
 | --- | --- |
-| `results/mnist_*.csv` | The eleven summary tables from `tnnls_experiments/exp4_mnist/summarize.py` (primary 1–7 + coverage, effective units, TC-magnitude, cutoff sensitivity) |
+| `results/mnist_*.csv` | The committed summary tables (primary 1–7 + coverage, effective units, TC-magnitude, cutoff sensitivity, profile cohorts/grid, factor assoc, extension diagnostics) |
 | `results/mnist_seed*_meta.json` | Per-seed training records (test acc 0.9860–0.9864, zero flags) |
-| `figures/fig01–fig06*.png` | The display set rendered by `figures_exp4.py` |
-| `figures_exp4.py` | Renders all figures from `results/` only (no models) |
-| `analysis_exp4_results.ipynb` | Exploration notebook over the committed CSVs (executed; displays the tables per pre-registered reading) |
+| `figures/` | Committed display set (fig01–fig07 + the qualitative panel) |
+| `figures_exp4.py` | Renders the predeclared figures from `results/` only |
+| `analysis_exp4_results.ipynb` | Exploration notebook (executed; per-reading tables + exploratory section) |
+| `common/` | The ported shared infrastructure (config/corex/metrics/seeds/io/runtime/store/information/partition) |
+| `classifier.py` `data.py` `train.py` | Spec-exact MLP, fixed splits (seed 5000), training (5100–5104) |
+| `benchmark.py` | Stage runner: clusters, test_clusters, fits, ablations, extensions, profiles, shifts |
+| `interventions.py` `decode_panel.py` `train_mirror_ae.py` | Metrics + predeclared panel machinery |
+| `summarize.py` | Aggregates → `run_results/mnist_*.csv` (copy selected tables into `results/`) |
+| `tests.py` `test_benchmark.py` `conftest.py` | Validation tests (spec tests 1–14 + machinery tests) — 36 passing |
 
-## Regeneration
+## Usage (from this directory)
 
 ```bash
-# summaries + figures + notebook all depend only on the raw shards or the CSVs:
-uv run python -m tnnls_experiments.exp4_mnist.summarize   # from repo root
-cd tnnls_human_experiments/exp4_mnist_benchmark && python figures_exp4.py
+python train.py --seeds 5100 5101 5102 5103 5104   # classifiers (GPU, ~3 min each)
+python -m pytest . -q                              # validation tests
+python benchmark.py --config exp4_full.yaml        # full grid (~50 min on one RTX 6000)
+python benchmark.py --config exp4_pilot.yaml       # feasibility pilot (~11 min)
+python summarize.py                                # summary CSVs from raw shards
+python figures_exp4.py                             # display set from results/
+python train_mirror_ae.py && python decode_panel.py  # qualitative panel
 ```
-
-The raw shards/parquets live in `outputs/raw/mnist/` (untracked,
-regenerable in ~50 min from the committed code/configs/checkpoint records).
