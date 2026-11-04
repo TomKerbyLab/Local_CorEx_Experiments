@@ -26,7 +26,12 @@ error, fixed and the panel regenerated), the extension's authoritative
 version and full-precision closure, the cluster-identity routing check,
 mixed-cluster cohort counts, the crossed-design bootstrap, and wording —
 were likewise verified first, then adopted as **[rev4]** (§E4.15,
-decisions #28–34).
+decisions #28–34). Round 5 (2026-11-04, current version) confirmed the
+round-4 fixes and raised three remaining consistency items (a
+mis-quoted per-seed range, a now-overreached mixed-cluster
+interpretation, and an inaccurate change summary) plus small edits;
+all verified first, then adopted as **[rev5]** (§E4.15, decisions
+#35–39). The consolidated account of record is §E4.16.
 
 ## E4.1 Motivation and role in the program
 
@@ -212,8 +217,14 @@ vector rounded to 6 decimals for display and reuse. Quantified (by a
 deterministic refit of all 300 output-aware fit conditions, §E4.13):
 6-decimal rounding would shift 15 of 3,000 reconstructed extension
 supports, by 1–4 units each (13 at q = 0.99, 2 at q = 0.95); every other
-support is unchanged. Full-precision storage is a listed follow-up
-(§E4.15, decision #24).
+support is unchanged. **[rev5] Closed:** full-precision vectors are now
+stored (`results/factor_hidden_mi_full_precision.npz`, saved by
+`reeval_extension_fullprecision.py`, which also verified the regenerated
+primary supports match the stored ones exactly and re-evaluated the 15
+affected extension families with their matched controls — §E4.14.2);
+the earlier "listed as follow-up" state belongs to the round-3 execution
+history, and the corrected extension values used here are the
+full-precision ones.
 
 ## E4.7 Intervention semantics
 
@@ -555,7 +566,11 @@ supported Reading 6 is stated as directional influence, nothing more.
   perturbed is the factor's **hidden-coordinate component**: the
   output-aware factor's logit loading is not controlled (logits respond
   only through the forward pass from layers 1/2). δ ∈ {0, ±1σ_Z, ±2σ_Z}
-  in units of the factor-score std over the discovery cluster; layer-1/2
+  in units of the factor-score std over the discovery cluster **where
+  the score is the hidden-coordinate component (σ_Z = std of s_h·h_std
+  over the discovery cluster, the quantity the code perturbs) — keeping
+  the ±1σ/±2σ labels aligned with the corrected intervention [rev5]**;
+  layer-1/2
   perturbations propagate forward through the frozen classifier, and the
   mirror AE always decodes from H₃ — its dimensions match by mirror
   architecture, which does not establish matched coordinate meanings, so
@@ -883,30 +898,49 @@ corrected):**
    is that "own" mixes modal-digit and secondary-digit images. Values
    below are paired LC − matched-random excesses (per-image weighted,
    output-aware; per-line `in_n`/`out_n` are the test-image counts of
-   that digit inside/outside the fit cluster), with the per-seed paired
+   that digit inside/outside the fit cluster — **[rev4]** both counts
+   now printed), with the per-seed paired
    within-digit contrast quoted. For the mixed clusters' **dominant**
    digits (well-populated cohorts) the contrast is small and
-   **sign-varies across clusters**: cluster 0, digit 9 (in_n 485):
-   0.010 vs 0.015 at H1 (contrast −0.005; per-seed −0.003 to +0.000),
+   **sign-varies across clusters**: cluster 0, digit 9 (in_n 485,
+   out_n 524):
+   0.010 vs 0.015 at H1 (contrast −0.005; per-seed −0.010 to +0.000
+   **[rev5]** — the round-3 text quoted an erroneous range −0.003 to
+   +0.000 that excluded −0.007 and −0.010; all quantities verified
+   mutually consistent: the same statistic, factors and weights),
    0.025 vs 0.036 at H2 (−0.011), 0.091 vs 0.090 at H3 (≈ 0); cluster 1,
-   digit 3 (in_n 274): +0.055 at H1, +0.005 at H2, +0.007 at H3;
-   cluster 13, digit 3 (in_n 680): **−0.045** at H1 (outside larger;
-   per-seed −0.020 to −0.060, consistent in sign), −0.014 at H2, −0.003
+   digit 3 (in_n 274, out_n 736): +0.055 at H1 (per-seed +0.044 to
+   +0.068), +0.005 at H2, +0.007 at H3;
+   cluster 13, digit 3 (in_n 680, out_n 330): **−0.045** at H1 (outside
+   larger; per-seed −0.060 to −0.020, consistent in sign), −0.014 at H2,
+   −0.003
    at H3. For **secondary** digits the inside-cluster excess is larger
-   at H1: cluster 0, digit 4 (in_n 281): 0.093 vs 0.042 (contrast
+   at H1: cluster 0, digit 4 (in_n 281, out_n 701): 0.093 vs 0.042
+   (contrast
    +0.051, per-seed +0.041 to +0.058 — consistent); cluster 1, digit 5
-   (in_n 175): 0.145 vs 0.063 (+0.082, per-seed +0.073 to +0.090);
-   cluster 13, digit 5 (in_n 346): 0.090 vs 0.029 (+0.061); cluster 15,
-   digit 7 (in_n 28): 0.128 vs 0.014 (+0.114) — small cohort; several
+   (in_n 175, out_n 717): 0.145 vs 0.063 (+0.082, per-seed +0.073 to
+   +0.090);
+   cluster 13, digit 5 (in_n 346, out_n 546): 0.090 vs 0.029 (+0.061);
+   cluster 15,
+   digit 7 (in_n 28, out_n 1000): 0.128 vs 0.014 (+0.114) — small
+   cohort; several
    secondary-digit cohorts are tiny (cluster 0, digit 5: in_n 10;
    digit 8: in_n 8; cluster 1, digit 9: in_n 12) and their large
    contrasts (+0.09 to +0.13 at H1) carry the corresponding sampling
    uncertainty despite the five seeds sharing the same few images.
    Contrasts narrow or close by H3 (cluster 0, digit 4: 0.085 vs 0.078).
-   Supported wording **[rev4]**: **cohort-specific differences among
-   secondary-digit images** (and digit-general behavior for dominant
-   digits) — "style-driven membership shapes secondary digits' effects"
-   (round-3 wording) went beyond what unvalidated clusters support.
+   **[rev5] Final wording:** the within-digit contrasts differ by
+   cluster and by layer — dominant- and secondary-digit contrasts have
+   comparable magnitudes with opposite signs (cluster 1, digit 3:
+   +0.055 vs cluster 13, digit 3: −0.045 at H1, against cluster 0,
+   digit 4: +0.051) — so the supported summary is **within-digit
+   response heterogeneity across clusters and layers, involving both
+   dominant and secondary digits**: the small overall
+   own-vs-same-digit-other contrast (item 1) coexists with these
+   conditional differences and does not average them away into a
+   finding of cluster-independence. This is "cohort-specific
+   differences among" digit images — not style effects (clusters
+   unvalidated as styles).
 
 Assignment diagnostics (Phase A; **[rev3]** reported; **[rev4]** extended
 to the full grids): the frozen Phase-A mechanics checks record a
@@ -959,11 +993,16 @@ separate `extension_summary_fp` table; per-row comparison in
 `results/extension_fullprecision_reeval.csv`: LC rows change by −0.017 to
 +0.054 in T_max only where the support membership changed; 4 families
 whose support size changed by one unit re-drew their random rows). The
-round-3 "unchanged at quoted precision" claim was itself checked
-explicitly **[rev4]**: with the authoritative base, quoted values are
-reproduced except H_input at H2/q = 0.95 = 0.5372 → quoted **0.54**
-(previously 0.53); every other §E4.14.2 number is unchanged at its quoted
-precision. Remaining approximations in the authoritative base: none for
+quoted-precision claim is now stated exactly **[rev5]**, with the
+comparison baseline identified: the figures quoted in the **round-3
+document** (from the extension's first run — rounded vectors,
+reconstructed validity) versus the **authoritative recomputation** (re-run
+store + full-precision corrections, `analysis_feedback_round3.py` §K).
+Changed at quoted precision: H_input at H2/q = 0.95 = 0.5372 → quoted
+**0.54** (was 0.53); H3 LC-minus-univariate ΔT_max **+0.047–0.069** (was
++0.049–0.070); mean q = 0.99 support density **0.53** (was 0.52, medians
+now 0.38 → 0.59, was 0.37 → 0.58). Unchanged at quoted precision: the
+T_max means, prevalences, and all remaining §E4.14.2 values. Remaining approximations in the authoritative base: none for
 validity (exact masks); support construction uses the **full-precision
 vectors** for the corrected families and the 6-decimal-rounded stored
 vectors elsewhere (verified identical except the 15 corrected cases —
@@ -1016,8 +1055,9 @@ are retained above in the executed-run description for the record.
 Readout: **[rev4 wording]** the exploratory favorable range on this
 network is q ≈ 0.9–0.95; at q = 0.99 the probe executes a **broad-support
 deletion** (a cumulative pairwise-MI support never defines an isolated
-factor intervention) rather than a factor-specific intervention — read
-as such, not as an operational recommendation. Diagnostics in
+factor intervention) **whose behavioral specificity is measured by the
+reported outcomes, not established either way by the support
+construction [rev5]**. Diagnostics in
 `results/extension_support_diag.csv` and
 `results/extension_fullprecision_reeval.csv` **[rev4]**.
 
@@ -1060,7 +1100,7 @@ adopted):**
 | 15 | Round-1 coarse in-cluster row | Kept as one descriptive paragraph (skewed r_dom distribution), never a finding |
 
 Experiment 4 records: the pre-registered grid was run in full and
-reviewed four times; the readings, the layer-level perturbation statement,
+reviewed five times; the readings, the layer-level perturbation statement,
 and the cross-experiment cross-references are recorded in this document
 (§E4.12–§E4.16 **[rev3]**, replacing the nonexistent "E4.4–E4.4.4" range)
 and the committed results directory.
@@ -1109,6 +1149,18 @@ against the code and the committed tables, then adopted — decisions
 | 32 | Cluster bootstrap | The unused nested resampler removed from the summarizer (dead code); the crossed-design caveat recorded; no cluster-sampling interval reported (§E4.10, §E4.11) |
 | 33 | Wording overreach | "Not an artifact of support size" → modest, method-sensitive adjusted association (size-related explanations reduced, not excluded); q = 0.99: support-size caution only, factor-specificity untested; "whole-factor deletion neighborhood" → "broad-support deletion"; "operational sweet spot" → exploratory favorable range on this network (§E4.14.2, Finding 6) |
 | 34 | Presentation | `fig07`'s top-5-mean scope clarified vs the per-factor heterogeneity display; per-layer, per-seed association correlations added (assoc/T_max +0.32–0.77, assoc/H_input −0.26–−0.65 across the 15 layer-seed cells — the pooled +0.60/−0.57 is not a layer-mixing artifact) |
+
+**Round-5 adoptions (2026-11-04, fifth review; every item first verified
+against the code and the committed tables, then adopted — decisions
+#35–39):**
+
+| # | Item | Resolution |
+|---|---|---|
+| 35 | Cohort-contrast consistency | The cluster 0/digit 9 H1 quantities verified mutually consistent (inside/outside excesses, their difference −0.005, and the mean of the per-seed contrasts −0.0047 all use the same statistic, factors, and weights); the doc's quoted per-seed RANGE was the sole error (−0.010 to +0.000, corrected from "−0.003 to +0.000"; the other quoted ranges re-verified) |
+| 36 | Mixed-cluster interpretation | "Digit-general behavior for dominant digits" removed; the supported summary is **within-digit response heterogeneity across clusters and layers, involving both dominant and secondary digits** (comparable magnitudes, opposite signs); `out_n` added wherever `in_n` is quoted |
+| 37 | Change-summary accuracy | The blanket "every other number unchanged" replaced by the explicit, baseline-identified list of quoted-precision changes (H2/q = 0.95 H_input 0.53 → 0.54; H3 univariate ΔT_max +0.049–0.070 → +0.047–0.069; mean q = 0.99 density 0.52 → 0.53, medians 0.38 → 0.59) (§E4.14.2) |
+| 38 | Small edits | §E4.6 now states the COMPLETED full-precision storage and re-evaluation (the follow-up wording moved to execution history); §E4.14.2's ending no longer implies construction-based non-specificity ("broad-support deletion whose behavioral specificity is measured by the reported outcomes"); σ_Z pinned to the hidden-coordinate score the code perturbs (§E4.13) |
+| 39 | Methods vs history | The account of record — the final procedure and results in one consolidated reader-facing statement — added to §E4.16, separating the current state from the round-by-round revision trail |
 ## E4.16 Experiment 4: what the pre-registered readings gave (the synthesis)
 
 Readings: (1) matched-random control — strongly supported; (2) univariate
@@ -1126,6 +1178,61 @@ measured random reference **[rev3]**. The per-image cohort summary
 is the influence formulation: the pipeline's factors are recovered,
 supported, and their perturbation effects are class-structured — but the
 instrument signs effects, never interaction type.
+
+**[rev5] The account of record (final procedure and results, separated
+from the review history).** One consolidated statement of what exp4
+established, independent of the revision trail above:
+
+*Procedure (final).* Canonical MNIST, seeds 5100–5104 (test accuracy
+.9860–.9864, all above the 97% flag); 20 PHATE (seed 5200) / k-means
+(seed 5201) discovery clusters from 10,000 held-out discovery images
+(assignment verified: a deterministic refit reproduces the stored
+discovery labels and the test-image assignments at agreement 1.0000 over
+all 10,000 each); per (seed, cluster, layer) Linear CorEx fits on
+standardized hidden activations (output-aware adds row-centered
+standardized logits), top-5 positive-TC factors; cumulative-MI supports
+at q ∈ {0.6, 0.7, 0.8, 0.9} (supplementary 0.95/0.99) built from the fit's
+full-precision MI (stored full-precision and rounded vectors verified
+mutually consistent; regenerated primary supports match the stored
+exactly); matched-random (20×), univariate (OA), and hidden-only (q =
+0.8) controls; the frozen evaluator (activation masking, trunk path,
+eval mode) on all 10,000 test images; 141,000 + 66,000 intervention
+evaluations, zero failures (store tables `mnist_*`;
+`analysis_feedback_round3.py`, `reeval_extension_fullprecision.py`
+reproduce every number below).
+
+*Results (final, all [rev5]-verified from the authoritative store).*
+(1) LC supports beat size-matched random deletion on every metric at
+every layer and threshold (e.g. per-seed H2/q = 0.9 T_max excesses
+0.170/0.184/0.162/0.168/0.147 vs random ≈ 0.006); matched-random
+deletion of the same sizes is behaviorally inert. (2) The dose-response
+through q = 0.95 raises T_max (0.113/0.171/0.155 at q = 0.9 → 0.215/
+0.250/0.254) without a class-concentration penalty (mean H_input falls);
+at q = 0.99 specificity declines, especially at H3 (prevalence
+0.382 → 0.150) — large broad-support masks (≈208 units, mean density
+0.53) whose chance overlap is already high (observed cross-factor
+Jaccard ≈ its same-size random reference). (3) Layer structure: at q =
+0.9 prevalence passes the conjunctive criterion mostly at H2/H3
+(0.376/0.370 vs H1 ≤ 0.06) — but H1 is not inert: 34.8% of H1 factors
+are strong-but-broad (T_max ≥ 0.10, H_input > 0.50) and per-image
+effects are real; the layer signal is class concentration, not
+magnitude. (4) LC beats the univariate control where the gap grows (H3:
+ΔT_max +0.006 → +0.053, ΔH_input −0.02 → −0.12 across q); at H1/H2 the
+differences are within ±0.021/±0.011, sign-mixed. (5) Including logits
+in the fit changes neither excess meaningfully (≤ 0.006 in T_max
+excess) and keeps the framing label-free. (6) TC and intervention
+magnitude are associated after the size adjustment (partial Spearman
+−0.01–0.32; size-band medians 0.12–0.42); association strength relates
+separately to magnitude (+0.32–0.77 per layer-seed cell) and
+concentration (−0.26–−0.65). (7) Directional concordance tracks layer
+(0.27/0.75/0.55) against a matched-random reference of 0.10–0.13.
+(8) [Exploratory] Per-image effects: same-digit inside ≈ outside the
+discovery cluster on average (paired contrast ≤ 0.004, SE ≤ 0.002), with
+within-digit response heterogeneity across clusters and layers
+(contrasts +0.05 to +0.11 and −0.05 for dominant- and secondary-digit
+cohorts at H1); discovery-side association predicts held-out excesses
+(Spearman 0.32/0.65/0.67). All claims are influence language (§E4.1);
+interaction type is never signed.
 
 ## E4.17 Grid summary and where everything lives
 
