@@ -497,9 +497,33 @@ supported Reading 6 is stated as directional influence, nothing more.
   `sensitivity_table` (superseded by `cutoff_sensitivity` in the
   summarizer), the one-line `concordance` helper, and unused imports);
   `tc_magnitude_relationship`'s unused `sup` argument dropped. Larger
-  refactors (a shared per-(seed, cluster, layer) context for the four
-  stage loops; a single-pass probability-shift expander) are identified
-  as future cleanup and not applied to the executed machinery.
+  refactors identified for later: a shared per-(seed, cluster, layer)
+  context for the four stage loops; a single-pass probability-shift
+  expander.
+- **All four simplifications implemented and re-run (2026-11-03, port
+  only — the reference stays as the executed-run spec record):** (1) the
+  four stage loops now share `LayerContext` + one
+  `iter_cluster_layer_contexts` traversal (one model pass per cluster,
+  identical representations across stages); (2) `write_probability_shifts`
+  is a single pass over all shards (one parquet per seed); (3) the
+  neutral-tie support mapping is one shared `mapped_supports`
+  implementation (fit stage + extension can no longer drift); (4) factor
+  rows now store the **exact validity mask and the factor's hidden-WS
+  loading vector** — the extension stage uses the exact mask (no more
+  MI≠0 reconstruction; the 1,158 logged reconstructs vanish). Two
+  port-time bugs found and fixed by the re-run's own gates: the
+  extension stage now pins its own threshold set (a full-grid config's
+  primary thresholds skipped every row) and the evaluator never writes
+  an empty shard (an empty completion had gated off legitimate retries).
+  **Output-identity verification: the re-run (fresh store, 600 fits +
+  141,000 interventions + 66k extension + 768k profile rows + 5 shift
+  parquets; ~75 min wall) reproduces all thirteen committed summary
+  tables with max |difference| = 0.00e+00**; the extension's own numbers
+  move by ≤ 0.002 (the reconstruction approximation's full effect —
+  §E4.14.2's figures are unchanged at quoted precision). This is the
+  codebase now exercising the stage-aware gate for real: the extension
+  and profiles stages ran after the completed main grid via the normal
+  CLI.
 
 ## E4.14 Results
 

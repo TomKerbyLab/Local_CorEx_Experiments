@@ -359,6 +359,59 @@ def posthoc_logit_mi(fit, H_fit: np.ndarray,
 
 
 # ---------------------------------------------------------------------------
+# Shared stage machinery
+# ---------------------------------------------------------------------------
+
+def mapped_supports(hmis, thresholds, valid_h, tie_seed) -> list:
+    """Cumulative-MI supports at the thresholds with the program's neutral
+    tie rule (seeded permutation before the descending sort), mapped back
+    to original unit indices. The single shared implementation for the fit
+    stage and the threshold-extension stage (they can no longer drift)."""
+    perm = np.random.default_rng(int(tie_seed)).permutation(len(hmis))
+    sups_p = metrics.nested_supports(hmis[perm], list(thresholds),
+                                     valid_h[perm])
+    sups = []
+    for sup in sups_p:
+        sup.indices = [int(perm[i]) for i in sup.indices]
+        sup.scores = [float(hmis[i]) for i in sup.indices]
+        sups.append(sup)
+    return sups
+
+
+class LayerContext:
+    """Per (cluster, layer) representation bundle shared by every stage
+    loop: the raw post-BN/ReLU H_l, its standardized copy with validity
+    flags, and the row-centered (softmax-relevant) logits + standardized
+    copy. Replaces the four stage loops' duplicated scaffolding."""
+
+    def __init__(self, h1, h2, h3, logits, layer):
+        logits = center_logits(logits)
+        H = {1: h1, 2: h2, 3: h3}[layer]
+        self.H_raw = H
+        self.H_std, self.valid_h, self.excluded_h = standardize_with_flags(H)
+        self.L_std, _, _ = standardize_with_flags(logits)
+        self.logits = logits
+
+
+def iter_cluster_layer_contexts(model, splits, labels_cluster, cfg, device):
+    """(cluster, layer, context) over the grid, skipping the predeclared
+    tiny-cluster exclusions; the model runs once per cluster."""
+    x_disc = splits["discovery_x"]
+    for cluster in range(int(cfg["n_clusters"])):
+        idx = np.flatnonzero(labels_cluster == cluster)
+        if len(idx) < MIN_CLUSTER_OBS:
+            logger.info("cluster %d has %d discovery obs (< %d); excluded "
+                        "from the grid (tiny-cluster rule); reported in "
+                        "coverage", cluster, len(idx), MIN_CLUSTER_OBS)
+            continue
+        h1, h2, h3, logits = extract_representations(
+            model, x_disc[torch.tensor(idx)], device)
+        for layer in cfg["layers"]:
+            yield cluster, int(layer), LayerContext(
+                h1, h2, h3, logits, int(layer))
+
+
+# ---------------------------------------------------------------------------
 # Trunk evaluator: interventions from cached pre-layer activations
 # ---------------------------------------------------------------------------
 
@@ -422,102 +475,98 @@ def factor_condition(seed, cluster, layer, input_condition):
 def run_fit_stage(model_seed, splits, labels_cluster, model, device,
                   store, cfg) -> None:
     """Fit CorEx for every (cluster, layer, input_condition); write factor and
-    support shards."""
-    x_disc = splits["discovery_x"]
-    for cluster in range(int(cfg["n_clusters"])):
-        idx = np.flatnonzero(labels_cluster == cluster)
-        if len(idx) < MIN_CLUSTER_OBS:
-            logger.info("cluster %d has %d discovery obs (< %d); excluded "
-                        "from the grid (tiny-cluster rule); reported in "
-                        "coverage", cluster, len(idx), MIN_CLUSTER_OBS)
-            continue
-        xc = x_disc[torch.tensor(idx)]
-        h1, h2, h3, logits = extract_representations(model, xc, device)
-        for layer in cfg["layers"]:
-            H = {1: h1, 2: h2, 3: h3}[layer]
-            H_std, valid_h, excluded_h = standardize_with_flags(H)
-            L_std, _, _ = standardize_with_flags(center_logits(logits))
-            for cond_name in cfg["input_conditions"]:
-                fcond = factor_condition(model_seed, cluster, layer, cond_name)
-                if store.is_done(fcond, ("factors", "supports")):
-                    continue
-                s_fit = seeds.derive_seed(model_seed, "corex", cluster, layer,
-                                          cond_name)
-                L_for_fit = L_std if cond_name == "output_aware" else None
-                fr = fit_and_rank(H_std, L_for_fit, int(cfg["n_factors"]), s_fit,
-                                  int(cfg["n_retained"]), valid_h=valid_h)
-                if fr["logit_mis"] is None:
-                    # hidden-only: post-hoc factor-to-logit association (spec)
-                    v_idx = np.flatnonzero(valid_h)
-                    fr["logit_mis"], fr["dominant"], fr["gaps"] = \
-                        posthoc_logit_mi(fr["fit"], H_std[:, v_idx], L_std)
-                    logit_source = "post_hoc"
-                else:
-                    logit_source = "fit"
-                factor_rows = []
-                support_rows = []
-                for rank, j in enumerate(fr["order"]):
-                    hmis = fr["hidden_mis"][j]
-                    row = {
-                        "model_seed": model_seed, "cluster": cluster,
-                        "layer": layer, "input_condition": cond_name,
-                        "factor_index": int(j), "factor_rank": rank,
-                        "factor_tc": float(fr["fit"].tcs[j]) / NATS_TO_BITS,  # bits
-                        "corex_seed": s_fit,
-                        "corex_converged": fr["fit"].converged,
-                        "n_negative_mi": fr["fit"].n_negative_mi,
-                        "n_valid_hidden": int(valid_h.sum()),
-                        "n_excluded_hidden": int((~valid_h).sum()),
-                        "corex_runtime_s": fr["fit"].runtime_s,
-                        "logit_mi_source": logit_source,
-                        "effective_n_units": effective_n_units(hmis, valid_h),
-                        # full-width hidden-MI vector (zeros at excluded
-                        # coordinates) for the TC/distributedness analyses
-                        "hidden_mi_vector": json.dumps(
-                            np.round(hmis, 6).tolist()),
-                    }
-                    if fr["logit_mis"] is not None:
-                        lmis = fr["logit_mis"][j]
-                        row["dominant_logit"] = int(fr["dominant"][j])
-                        row["logit_mi_gap"] = float(fr["gaps"][j])
-                        # association scores are recorded in bits at this
-                        # boundary (fit-side and post-hoc alike; Linear CorEx
-                        # reports nats — the Experiment 3 unit lesson)
-                        for c in range(10):
-                            row[f"logit_mi_{c}"] = float(lmis[c]) / NATS_TO_BITS
-                    factor_rows.append(row)
-                    # hidden-unit supports (nested) from hidden MI only;
-                    # MI-score ties broken by seeded permutation (neutral
-                    # tie rule), mapped back to original unit indices
-                    s_tie = seeds.derive_seed(s_fit, "support_ties")
-                    perm = np.random.default_rng(s_tie).permutation(
-                        H_std.shape[1])
-                    sups_p = metrics.nested_supports(
-                        hmis[perm], list(cfg["support_thresholds"]),
-                        valid_h[perm])
-                    sups = []
-                    for sup in sups_p:
-                        sup.indices = [int(perm[i]) for i in sup.indices]
-                        sup.scores = [float(hmis[i]) for i in sup.indices]
-                        sups.append(sup)
-                    for q, sup in zip(cfg["support_thresholds"], sups):
-                        for rank_in_sup, (unit, score) in enumerate(
-                                zip(sup.indices, sup.scores)):
-                            support_rows.append({
-                                "model_seed": model_seed, "cluster": cluster,
-                                "layer": layer, "input_condition": cond_name,
-                                "factor_index": int(j), "factor_rank": rank,
-                                "threshold": float(q),
-                                "mi_rank": rank_in_sup,
-                                "hidden_unit": int(unit),
-                                "mi_score": float(score) / NATS_TO_BITS,
-                                "achieved_fraction": sup.achieved_fraction,
-                                "support_size": sup.size,
-                                "support_density": sup.density,
-                                "support_degenerate": sup.degenerate,
-                            })
-                store.write(fcond, "factors", factor_rows)
-                store.write(fcond, "supports", support_rows)
+    support shards. Factor rows carry the full-width hidden-MI vector, the
+    exact validity mask, and the factor's hidden-unit loading vector (ws
+    row) so downstream stages never need to reconstruct validity or
+    refit."""
+    for cluster, layer, ctx in iter_cluster_layer_contexts(
+            model, splits, labels_cluster, cfg, device):
+        for cond_name in cfg["input_conditions"]:
+            fcond = factor_condition(model_seed, cluster, layer, cond_name)
+            if store.is_done(fcond, ("factors", "supports")):
+                continue
+            s_fit = seeds.derive_seed(model_seed, "corex", cluster, layer,
+                                      cond_name)
+            L_for_fit = ctx.L_std if cond_name == "output_aware" else None
+            fr = fit_and_rank(ctx.H_std, L_for_fit, int(cfg["n_factors"]),
+                              s_fit, int(cfg["n_retained"]),
+                              valid_h=ctx.valid_h)
+            if fr["logit_mis"] is None:
+                # hidden-only: post-hoc factor-to-logit association (spec)
+                v_idx = np.flatnonzero(ctx.valid_h)
+                fr["logit_mis"], fr["dominant"], fr["gaps"] = \
+                    posthoc_logit_mi(fr["fit"], ctx.H_std[:, v_idx],
+                                     ctx.L_std)
+                logit_source = "post_hoc"
+            else:
+                logit_source = "fit"
+            # fit-side loading vectors (ws rows), full width with zeros at
+            # excluded coordinates — removes the validity reconstruction
+            ws_all = np.asarray(fr["fit"].model.ws)
+            ws_full = np.zeros((ws_all.shape[0], ctx.H_std.shape[1]))
+            v_idx = np.flatnonzero(ctx.valid_h)
+            ws_full[:, v_idx] = ws_all[:, :len(v_idx)]
+            factor_rows = []
+            support_rows = []
+            for rank, j in enumerate(fr["order"]):
+                hmis = fr["hidden_mis"][j]
+                row = {
+                    "model_seed": model_seed, "cluster": cluster,
+                    "layer": layer, "input_condition": cond_name,
+                    "factor_index": int(j), "factor_rank": rank,
+                    "factor_tc": float(fr["fit"].tcs[j]) / NATS_TO_BITS,  # bits
+                    "corex_seed": s_fit,
+                    "corex_converged": fr["fit"].converged,
+                    "n_negative_mi": fr["fit"].n_negative_mi,
+                    "n_valid_hidden": int(ctx.valid_h.sum()),
+                    "n_excluded_hidden": int((~ctx.valid_h).sum()),
+                    "corex_runtime_s": fr["fit"].runtime_s,
+                    "logit_mi_source": logit_source,
+                    "effective_n_units": effective_n_units(hmis, ctx.valid_h),
+                    # full-width hidden-MI vector (zeros at excluded
+                    # coordinates; rounded to 6 decimals) for the
+                    # TC/distributedness analyses and support reuse
+                    "hidden_mi_vector": json.dumps(
+                        np.round(hmis, 6).tolist()),
+                    # exact validity mask + the factor's loading vector
+                    "valid_mask": json.dumps(
+                        ctx.valid_h.astype(int).tolist()),
+                    "hidden_ws_vector": json.dumps(
+                        np.round(ws_full[j], 8).tolist()),
+                }
+                if fr["logit_mis"] is not None:
+                    lmis = fr["logit_mis"][j]
+                    row["dominant_logit"] = int(fr["dominant"][j])
+                    row["logit_mi_gap"] = float(fr["gaps"][j])
+                    # association scores are recorded in bits at this
+                    # boundary (fit-side and post-hoc alike; Linear CorEx
+                    # reports nats — the Experiment 3 unit lesson)
+                    for c in range(10):
+                        row[f"logit_mi_{c}"] = float(lmis[c]) / NATS_TO_BITS
+                factor_rows.append(row)
+                # hidden-unit supports (nested) from hidden MI only, via the
+                # shared neutral-tie implementation
+                s_tie = seeds.derive_seed(s_fit, "support_ties")
+                sups = mapped_supports(hmis, cfg["support_thresholds"],
+                                       ctx.valid_h, s_tie)
+                for q, sup in zip(cfg["support_thresholds"], sups):
+                    for rank_in_sup, (unit, score) in enumerate(
+                            zip(sup.indices, sup.scores)):
+                        support_rows.append({
+                            "model_seed": model_seed, "cluster": cluster,
+                            "layer": layer, "input_condition": cond_name,
+                            "factor_index": int(j), "factor_rank": rank,
+                            "threshold": float(q),
+                            "mi_rank": rank_in_sup,
+                            "hidden_unit": int(unit),
+                            "mi_score": float(score) / NATS_TO_BITS,
+                            "achieved_fraction": sup.achieved_fraction,
+                            "support_size": sup.size,
+                            "support_density": sup.density,
+                            "support_degenerate": sup.degenerate,
+                        })
+            store.write(fcond, "factors", factor_rows)
+            store.write(fcond, "supports", support_rows)
 
 
 # ---------------------------------------------------------------------------
@@ -669,6 +718,10 @@ def run_ablation_stage_for_factor(
                 labels_test, dominant_logit,
                 removed_act_mag=trunk.mean_removed_activation(layer, uni))
             rows.append(row_u)
+    if not rows:
+        # never write an empty shard: an empty completion would gate off
+        # any later legitimate attempt at this condition
+        return
     store.write(acond, table_name, rows)
 
 
@@ -676,50 +729,33 @@ def run_ablation_stage(model_seed, splits, labels_cluster, model, device,
                        store, cfg) -> None:
     """All interventions for one model seed."""
     labels_test = splits["test_y"].numpy()
-    x_disc = splits["discovery_x"]
     trunk = TrunkEvaluator(model, splits["test_x"], device)
-    for cluster in range(int(cfg["n_clusters"])):
-        idx = np.flatnonzero(labels_cluster == cluster)
-        if len(idx) < MIN_CLUSTER_OBS:
-            logger.info("cluster %d has %d discovery obs (< %d); excluded "
-                        "from ablations (tiny-cluster rule)", cluster,
-                        len(idx), MIN_CLUSTER_OBS)
-            continue
-        xc = x_disc[torch.tensor(idx)]
-        h1, h2, h3, logits_disc = extract_representations(model, xc, device)
-        # row-centered logits: softmax-relevant, behaviorally invariant part
-        logits_disc = center_logits(logits_disc)
-        for layer in cfg["layers"]:
-            H = {1: h1, 2: h2, 3: h3}[layer]
-            H_std, valid_h, _ = standardize_with_flags(H)
-            L_std, _, _ = standardize_with_flags(logits_disc)
-            for cond_name in cfg["input_conditions"]:
-                fcond = factor_condition(model_seed, cluster, layer, cond_name)
-                if not store.is_done(fcond, ("factors", "supports")):
-                    continue  # fits stage must have run
-                factors = store.shard_path(fcond, "factors")
-                import pandas as pd
-
-                fdf = pd.read_parquet(factors)
-                sups_df = pd.read_parquet(store.shard_path(fcond, "supports"))
-                for _, frow in fdf.iterrows():
-                    fi = int(frow["factor_index"])
-                    thresholds = (list(cfg["support_thresholds"])
-                                  if cond_name == "output_aware"
-                                  else [HIDDEN_ONLY_FRACTION])
-                    sup_dict = {}
-                    for q in thresholds:
-                        sub = sups_df[(sups_df["factor_index"] == fi)
-                                      & (sups_df["threshold"] == q)]
-                        sup_dict[q] = sub.sort_values("mi_rank")[
-                            "hidden_unit"].tolist()
-                    dominant = frow.get("dominant_logit", -1)
-                    dominant = None if (dominant is None or dominant < 0) else int(dominant)
-                    run_ablation_stage_for_factor(
-                        model_seed, cluster, layer, cond_name, fi,
-                        int(frow["factor_rank"]), sup_dict,
-                        H_std, logits_disc, valid_h,
-                        dominant, trunk, labels_test, store, cfg)
+    for cluster, layer, ctx in iter_cluster_layer_contexts(
+            model, splits, labels_cluster, cfg, device):
+        for cond_name in cfg["input_conditions"]:
+            fcond = factor_condition(model_seed, cluster, layer, cond_name)
+            if not store.is_done(fcond, ("factors", "supports")):
+                continue  # fits stage must have run
+            fdf = pd.read_parquet(store.shard_path(fcond, "factors"))
+            sups_df = pd.read_parquet(store.shard_path(fcond, "supports"))
+            for _, frow in fdf.iterrows():
+                fi = int(frow["factor_index"])
+                thresholds = (list(cfg["support_thresholds"])
+                              if cond_name == "output_aware"
+                              else [HIDDEN_ONLY_FRACTION])
+                sup_dict = {}
+                for q in thresholds:
+                    sub = sups_df[(sups_df["factor_index"] == fi)
+                                  & (sups_df["threshold"] == q)]
+                    sup_dict[q] = sub.sort_values("mi_rank")[
+                        "hidden_unit"].tolist()
+                dominant = frow.get("dominant_logit", -1)
+                dominant = None if (dominant is None or dominant < 0) else int(dominant)
+                run_ablation_stage_for_factor(
+                    model_seed, cluster, layer, cond_name, fi,
+                    int(frow["factor_rank"]), sup_dict,
+                    ctx.H_std, ctx.logits, ctx.valid_h,
+                    dominant, trunk, labels_test, store, cfg)
 
 
 # ---------------------------------------------------------------------------
@@ -781,106 +817,97 @@ def run_profiles_stage(model_seed, splits, labels_cluster, test_cluster,
     not stored. Factors are profiled before any aggregate is formed.
     """
     labels_test = splits["test_y"].numpy()
-    x_disc = splits["discovery_x"]
     trunk = TrunkEvaluator(model, splits["test_x"], device)
     p_base = trunk.baseline_probs
-    for cluster in range(int(cfg["n_clusters"])):
-        idx = np.flatnonzero(labels_cluster == cluster)
-        if len(idx) < MIN_CLUSTER_OBS:
-            continue
-        xc = x_disc[torch.tensor(idx)]
-        h1, h2, h3, logits_disc = extract_representations(model, xc, device)
-        logits_disc = center_logits(logits_disc)
-        for layer in cfg["layers"]:
-            H = {1: h1, 2: h2, 3: h3}[layer]
-            H_std, valid_h, _ = standardize_with_flags(H)
-            for cond_name in cfg["input_conditions"]:
-                fcond = factor_condition(model_seed, cluster, layer, cond_name)
-                if not store.is_done(fcond, ("factors", "supports")):
-                    continue
-                pcond = {"stage": "profiles", "model_seed": model_seed,
-                         "cluster": cluster, "layer": layer,
-                         "input_condition": cond_name}
-                if store.is_done(pcond, ("profiles",)):
-                    continue
-                fdf = pd.read_parquet(store.shard_path(fcond, "factors"))
-                sups_df = pd.read_parquet(store.shard_path(fcond, "supports"))
-                valid_idx = np.flatnonzero(valid_h)
-                cell_counts = np.bincount(
-                    test_cluster * N_CLASSES + labels_test,
-                    minlength=200).astype(float)
-                rows: list[dict] = []
-                for _, frow in fdf.iterrows():
-                    fi = int(frow["factor_index"])
-                    dominant = frow.get("dominant_logit", -1)
-                    dominant = (None if (dominant is None or dominant < 0)
-                                else int(dominant))
-                    sub = sups_df[(sups_df["factor_index"] == fi)
-                                  & (sups_df["threshold"] == PROFILES_THRESHOLD)]
-                    sup = sub.sort_values("mi_rank")["hidden_unit"].tolist()
-                    if not sup:
-                        continue  # empty/degenerate support: no profile
-                    s = len(sup)
-                    base_int = {
-                        "model_seed": model_seed, "cluster": cluster,
-                        "layer": layer, "input_condition": cond_name,
-                        "factor_index": fi,
-                        "factor_rank": int(frow["factor_rank"]),
-                        "threshold": float(PROFILES_THRESHOLD),
-                        "dominant_logit": (dominant if dominant is not None
-                                           else -1),
-                        "support_size": s,
-                    }
-                    # LC grid
-                    p_abl = trunk.ablated_probs(layer, sup)
-                    a_sum, f_sum, s_sum, _ = _accumulate_profile(
-                        p_abl, p_base, labels_test, test_cluster)
-                    lc_cells = _grid_rows_from_sums(
-                        a_sum, f_sum, s_sum, cell_counts)
-                    # matched random grids (mean over draws, same seeds)
-                    n_controls = (int(cfg["n_random_controls_hidden_only"])
-                                  if cond_name == "hidden_only"
-                                  else int(cfg["n_random_controls"]))
-                    ra = np.zeros(200)
-                    rf = np.zeros(200)
-                    rs = np.zeros((200, N_CLASSES))
-                    for draw in range(n_controls):
-                        s_rand = seeds.derive_seed(
-                            model_seed, "random_ablation", cluster, layer,
-                            fi, PROFILES_THRESHOLD, draw)
-                        rng = np.random.default_rng(s_rand)
-                        rand_sup = rng.choice(valid_idx, size=s,
-                                              replace=False).tolist()
-                        a_r, f_r, s_r, _ = _accumulate_profile(
-                            trunk.ablated_probs(layer, rand_sup), p_base,
-                            labels_test, test_cluster)
-                        ra += a_r
-                        rf += f_r
-                        rs += s_r
-                    rand_cells = [
-                        {"eval_cluster": cell["eval_cluster"],
-                         "true_class": cell["true_class"],
-                         "n_images": cell["n_images"],
-                         "a_mean": float(
-                             ra[key] / (n_controls * cell["n_images"])),
-                         "flip_rate": float(
-                             rf[key] / (n_controls * cell["n_images"])),
-                         "signed_shift": json.dumps(np.round(
-                             rs[key] / (n_controls * cell["n_images"]),
-                             6).tolist())}
-                        for cell in lc_cells
-                        for key in (cell["eval_cluster"] * N_CLASSES
-                                    + cell["true_class"],)]
-                    for method, cells, draw in (
-                            ("local_corex", lc_cells, 0),
-                            ("random_mean", rand_cells, -1)):
-                        for cell in cells:
-                            rows.append({**base_int, "method": method,
-                                         "random_draw": draw, **cell})
-                store.write(pcond, "profiles", rows)
-                logger.info("profiles: seed %s cluster %s layer %d %s: "
-                            "%d rows", model_seed, cluster, layer, cond_name,
-                            len(rows))
+    for cluster, layer, ctx in iter_cluster_layer_contexts(
+            model, splits, labels_cluster, cfg, device):
+        for cond_name in cfg["input_conditions"]:
+            fcond = factor_condition(model_seed, cluster, layer, cond_name)
+            if not store.is_done(fcond, ("factors", "supports")):
+                continue
+            pcond = {"stage": "profiles", "model_seed": model_seed,
+                     "cluster": cluster, "layer": layer,
+                     "input_condition": cond_name}
+            if store.is_done(pcond, ("profiles",)):
+                continue
+            fdf = pd.read_parquet(store.shard_path(fcond, "factors"))
+            sups_df = pd.read_parquet(store.shard_path(fcond, "supports"))
+            valid_idx = np.flatnonzero(ctx.valid_h)
+            cell_counts = np.bincount(
+                test_cluster * N_CLASSES + labels_test,
+                minlength=200).astype(float)
+            rows: list[dict] = []
+            for _, frow in fdf.iterrows():
+                fi = int(frow["factor_index"])
+                dominant = frow.get("dominant_logit", -1)
+                dominant = (None if (dominant is None or dominant < 0)
+                            else int(dominant))
+                sub = sups_df[(sups_df["factor_index"] == fi)
+                              & (sups_df["threshold"] == PROFILES_THRESHOLD)]
+                sup = sub.sort_values("mi_rank")["hidden_unit"].tolist()
+                if not sup:
+                    continue  # empty/degenerate support: no profile
+                s = len(sup)
+                base_int = {
+                    "model_seed": model_seed, "cluster": cluster,
+                    "layer": layer, "input_condition": cond_name,
+                    "factor_index": fi,
+                    "factor_rank": int(frow["factor_rank"]),
+                    "threshold": float(PROFILES_THRESHOLD),
+                    "dominant_logit": (dominant if dominant is not None
+                                       else -1),
+                    "support_size": s,
+                }
+                # LC grid
+                p_abl = trunk.ablated_probs(layer, sup)
+                a_sum, f_sum, s_sum, _ = _accumulate_profile(
+                    p_abl, p_base, labels_test, test_cluster)
+                lc_cells = _grid_rows_from_sums(
+                    a_sum, f_sum, s_sum, cell_counts)
+                # matched random grids (mean over draws, same seeds)
+                n_controls = (int(cfg["n_random_controls_hidden_only"])
+                              if cond_name == "hidden_only"
+                              else int(cfg["n_random_controls"]))
+                ra = np.zeros(200)
+                rf = np.zeros(200)
+                rs = np.zeros((200, N_CLASSES))
+                for draw in range(n_controls):
+                    s_rand = seeds.derive_seed(
+                        model_seed, "random_ablation", cluster, layer,
+                        fi, PROFILES_THRESHOLD, draw)
+                    rng = np.random.default_rng(s_rand)
+                    rand_sup = rng.choice(valid_idx, size=s,
+                                          replace=False).tolist()
+                    a_r, f_r, s_r, _ = _accumulate_profile(
+                        trunk.ablated_probs(layer, rand_sup), p_base,
+                        labels_test, test_cluster)
+                    ra += a_r
+                    rf += f_r
+                    rs += s_r
+                rand_cells = [
+                    {"eval_cluster": cell["eval_cluster"],
+                     "true_class": cell["true_class"],
+                     "n_images": cell["n_images"],
+                     "a_mean": float(
+                         ra[key] / (n_controls * cell["n_images"])),
+                     "flip_rate": float(
+                         rf[key] / (n_controls * cell["n_images"])),
+                     "signed_shift": json.dumps(np.round(
+                         rs[key] / (n_controls * cell["n_images"]),
+                         6).tolist())}
+                    for cell in lc_cells
+                    for key in (cell["eval_cluster"] * N_CLASSES
+                                + cell["true_class"],)]
+                for method, cells, draw in (
+                        ("local_corex", lc_cells, 0),
+                        ("random_mean", rand_cells, -1)):
+                    for cell in cells:
+                        rows.append({**base_int, "method": method,
+                                     "random_draw": draw, **cell})
+            store.write(pcond, "profiles", rows)
+            logger.info("profiles: seed %s cluster %s layer %d %s: "
+                        "%d rows", model_seed, cluster, layer, cond_name,
+                        len(rows))
 
 
 # ---------------------------------------------------------------------------
@@ -890,21 +917,12 @@ def run_profiles_stage(model_seed, splits, labels_cluster, test_cluster,
 SUPPORT_EXTENSIONS = (0.95, 0.99)
 
 
-def reconstruct_supports_at(hmi: np.ndarray, valid_from_mi: np.ndarray,
+def reconstruct_supports_at(hmi: np.ndarray, valid_h: np.ndarray,
                             thresholds, s_tie: int) -> list:
     """Rebuild cumulative-MI supports at EXTENSION thresholds from a
     factor's stored hidden-MI vector (rounded to 6 decimals at the fit
-    boundary — a documented approximation of the fit-time vector),
-    applying the same neutral-tie machinery as the primary stage."""
-    perm = np.random.default_rng(int(s_tie)).permutation(len(hmi))
-    sups_p = metrics.nested_supports(hmi[perm], list(thresholds),
-                                     valid_from_mi[perm])
-    sups = []
-    for sup in sups_p:
-        sup.indices = [int(perm[i]) for i in sup.indices]
-        sup.scores = [float(hmi[i]) for i in sup.indices]
-        sups.append(sup)
-    return sups
+    boundary) via the shared neutral-tie machinery."""
+    return mapped_supports(hmi, thresholds, valid_h, s_tie)
 
 
 def run_ablation_extension_stage(model_seed, splits, labels_cluster, model,
@@ -915,32 +933,29 @@ def run_ablation_extension_stage(model_seed, splits, labels_cluster, model,
     Reconstructs the extension supports from the stored per-factor
     hidden-MI vectors of the existing fits (the primary thresholds' rows
     are never recomputed), then calls the frozen intervention evaluator.
-    Conditions whose fit shard is missing are skipped. Validity flags are
-    reconstructed as (hidden-MI vector != 0); a validity count mismatch
-    against the stored n_valid_hidden is logged (a zero-MI valid unit in
-    the original fit would shift the random-control pool by at most one).
+    Validity: the exact stored `valid_mask` when the fit shard carries it
+    (fits that store loading vectors), else the MI != 0 reconstruction
+    (mismatch logged; at most a one-unit shift of the random pool).
     """
     labels_test = splits["test_y"].numpy()
-    x_disc = splits["discovery_x"]
     trunk = TrunkEvaluator(model, splits["test_x"], device)
-    for cluster in range(int(cfg["n_clusters"])):
-        idx = np.flatnonzero(labels_cluster == cluster)
-        if len(idx) < MIN_CLUSTER_OBS:
+    # pin the stage's own thresholds: a full-grid config lists the primary
+    # thresholds, but this stage's supports are the extension set
+    cfg = {**cfg, "support_thresholds": list(SUPPORT_EXTENSIONS)}
+    for cluster, layer, ctx in iter_cluster_layer_contexts(
+            model, splits, labels_cluster, cfg, device):
+        fcond = factor_condition(model_seed, cluster, layer, "output_aware")
+        if not store.is_done(fcond, ("factors", "supports")):
             continue
-        xc = x_disc[torch.tensor(idx)]
-        h1, h2, h3, logits_disc = extract_representations(model, xc, device)
-        logits_disc = center_logits(logits_disc)
-        for layer in cfg["layers"]:
-            H = {1: h1, 2: h2, 3: h3}[layer]
-            H_std, _, _ = standardize_with_flags(H)
-            fcond = factor_condition(model_seed, cluster, layer,
-                                     "output_aware")
-            if not store.is_done(fcond, ("factors", "supports")):
-                continue
-            fdf = pd.read_parquet(store.shard_path(fcond, "factors"))
-            for _, frow in fdf.iterrows():
-                fi = int(frow["factor_index"])
-                hmi = np.array(json.loads(frow["hidden_mi_vector"]))
+        fdf = pd.read_parquet(store.shard_path(fcond, "factors"))
+        has_mask = "valid_mask" in fdf.columns
+        for _, frow in fdf.iterrows():
+            fi = int(frow["factor_index"])
+            hmi = np.array(json.loads(frow["hidden_mi_vector"]))
+            if has_mask:
+                valid_h = np.array(json.loads(frow["valid_mask"]),
+                                   dtype=bool)
+            else:
                 valid_h = hmi != 0.0
                 n_rec = int(valid_h.sum())
                 if n_rec != int(frow["n_valid_hidden"]):
@@ -949,66 +964,68 @@ def run_ablation_extension_stage(model_seed, splits, labels_cluster, model,
                                 "(zero-MI valid units present)",
                                 model_seed, cluster, layer, fi, n_rec,
                                 int(frow["n_valid_hidden"]))
-                s_tie = seeds.derive_seed(int(frow["corex_seed"]),
-                                          "support_ties")
-                sups = {q: sup.indices for q, sup in zip(
-                    SUPPORT_EXTENSIONS,
-                    reconstruct_supports_at(hmi, valid_h,
-                                            SUPPORT_EXTENSIONS, s_tie))}
-                dominant = frow.get("dominant_logit", -1)
-                dominant = (None if (dominant is None or dominant < 0)
-                            else int(dominant))
-                run_ablation_stage_for_factor(
-                    model_seed, cluster, layer, "output_aware", fi,
-                    int(frow["factor_rank"]), sups, H_std, logits_disc,
-                    valid_h, dominant, trunk, labels_test, store, cfg,
-                    table_name="extension_summary")
+            s_tie = seeds.derive_seed(int(frow["corex_seed"]),
+                                      "support_ties")
+            sups = {q: sup.indices for q, sup in zip(
+                SUPPORT_EXTENSIONS,
+                reconstruct_supports_at(hmi, valid_h,
+                                        SUPPORT_EXTENSIONS, s_tie))}
+            dominant = frow.get("dominant_logit", -1)
+            dominant = (None if (dominant is None or dominant < 0)
+                        else int(dominant))
+            run_ablation_stage_for_factor(
+                model_seed, cluster, layer, "output_aware", fi,
+                int(frow["factor_rank"]), sups, ctx.H_std, ctx.logits,
+                valid_h, dominant, trunk, labels_test, store, cfg,
+                table_name="extension_summary")
 
 
 # ---------------------------------------------------------------------------
 # Probability-shift storage (large; per intervention 100 rows)
 # ---------------------------------------------------------------------------
 
-def write_probability_shifts(model_seed, store, cfg):
-    """Expand saved delta matrices into the tidy mnist_probability_shifts table.
-
-    Reads ablation_summary shards (never reruns models) and writes one parquet
-    per model seed. Each row carries the class-mean baseline probability,
-    ablated probability, and signed change per (true class, output class) —
-    the spec-required contents of mnist_probability_shifts. Per-image
-    probabilities are not stored individually (they are reconstructible from
-    checkpoints); the class means are stored in full.
+def write_probability_shifts(store):
+    """Expand saved delta matrices into the tidy mnist_probability_shifts
+    table: ONE read pass over the ablation_summary shards (replacing the
+    per-seed calls that each reread everything), one parquet per model
+    seed. Each row carries the class-mean baseline probability, ablated
+    probability, and signed change per (true class, output class) — the
+    spec-required contents of mnist_probability_shifts. Per-image
+    probabilities are not stored individually (they are reconstructible
+    from checkpoints); the class means are stored in full.
     """
-    import pandas as pd
-
     rows = []
     df = store.read_all("ablation_summary")
     if df.empty:
         return None
-    for _, r in df.iterrows():
-        if r["model_seed"] != model_seed:
-            continue
-        delta = np.array(json.loads(r["delta_matrix"]))
-        pbar_base = np.array(json.loads(r["pbar_baseline_matrix"]))
-        pbar_abl = np.array(json.loads(r["pbar_ablated_matrix"]))
-        for y in range(10):
-            for c in range(10):
-                rows.append({
-                    "model_seed": r["model_seed"], "cluster": r["cluster"],
-                    "layer": r["layer"],
-                    "input_condition": r["input_condition"],
-                    "factor_index": r["factor_index"],
-                    "method": r["method"], "random_draw": r["random_draw"],
-                    "threshold": r["threshold"],
-                    "true_class": y, "output_class": c,
-                    "baseline_probability": float(pbar_base[y, c]),
-                    "ablated_probability": float(pbar_abl[y, c]),
-                    "signed_change": float(delta[y, c]),
-                })
-    out = pd.DataFrame(rows)
-    path = config.RAW_DIR / EXPERIMENT / f"mnist_probability_shifts_seed{model_seed}.parquet"
-    out.to_parquet(path, index=False)
-    return path
+    paths = []
+    for model_seed, sub in df.groupby("model_seed"):
+        rows = []
+        for _, r in sub.iterrows():
+            delta = np.array(json.loads(r["delta_matrix"]))
+            pbar_base = np.array(json.loads(r["pbar_baseline_matrix"]))
+            pbar_abl = np.array(json.loads(r["pbar_ablated_matrix"]))
+            for y in range(10):
+                for c in range(10):
+                    rows.append({
+                        "model_seed": r["model_seed"],
+                        "cluster": r["cluster"], "layer": r["layer"],
+                        "input_condition": r["input_condition"],
+                        "factor_index": r["factor_index"],
+                        "method": r["method"],
+                        "random_draw": r["random_draw"],
+                        "threshold": r["threshold"],
+                        "true_class": y, "output_class": c,
+                        "baseline_probability": float(pbar_base[y, c]),
+                        "ablated_probability": float(pbar_abl[y, c]),
+                        "signed_change": float(delta[y, c]),
+                    })
+        out = pd.DataFrame(rows)
+        path = config.RAW_DIR / EXPERIMENT / \
+            f"mnist_probability_shifts_seed{int(model_seed)}.parquet"
+        out.to_parquet(path, index=False)
+        paths.append(path)
+    return paths
 
 
 # ---------------------------------------------------------------------------
@@ -1070,11 +1087,15 @@ def main(cfg: dict, stages: tuple[str, ...] = ("clusters", "fits", "ablations"))
             run_profiles_stage(model_seed, splits, labels_cluster,
                                labels_test_cluster, model, device, store,
                                defaults)
-        if "shifts" in stages:
-            write_probability_shifts(model_seed, store, defaults)
         summary[model_seed] = time.time() - t0
         logger.info("model seed %s stages %s done in %.0f s", model_seed,
                     stages, summary[model_seed])
+
+    if "shifts" in stages:
+        # single pass over all shards, one parquet per model seed
+        shift_paths = write_probability_shifts(store)
+        logger.info("probability-shift parquets written: %d",
+                    len(shift_paths) if shift_paths else 0)
 
     record = {"stages": list(stages), "model_seeds_done": list(summary),
               "elapsed_per_seed_s": summary}
