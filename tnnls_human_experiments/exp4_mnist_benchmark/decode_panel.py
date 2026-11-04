@@ -10,14 +10,19 @@ Frozen selection:
   3. Representative image: the lowest-index TEST image assigned to that
      cluster (fixed held-out rule; assignment stage, decision #11).
 
-Perturbation semantics: the linear factor Z_j = s_j . h_std (s_j the
-factor's loading on the standardized hidden coordinates), so the
-minimal-norm change of the factor score by +-delta is
-h_std' = h_std + delta * s_h / ||s_h||^2, mapped to raw activations by the
-cluster's (mean, std) used at fit time. delta in {0, +-1, +-2} std of Z_j
-over the discovery cluster. Layer 1/2 perturbations propagate forward
-through the classifier to H3; the mirror autoencoder (train_mirror_ae)
-decodes the latent to pixels.
+Perturbation semantics (round-4 correction, exp4.md §E4.13): the factor
+score on the layer's standardized hidden coordinates is z = s_h . h_std,
+so z is linear in the RAW activations with gradient g = s_h / sigma_l
+(elementwise). The minimum-Euclidean-norm RAW-activation change achieving
+a factor-score change delta is
+    Delta h = delta * g / ||g||^2,
+whose achieved change is delta exactly (asserted per plotted row). delta
+in {0, +-1, +-2} std of Z_j over the discovery cluster. The score
+perturbed is the factor's hidden-coordinate component: the output-aware
+factor's logit loading is separate and is not controlled (logits respond
+to the change only through the forward pass from layer 1/2). Layer 1/2
+perturbations propagate forward through the classifier to H3; the mirror
+autoencoder (train_mirror_ae) decodes the latent to pixels.
 """
 from __future__ import annotations
 
@@ -96,19 +101,26 @@ def decode_with_perturbations(model, decoder, splits, test_cluster, labels_clust
     """One panel row: decoded images for the delta grid (units of Z-std)."""
     s_h, sigma, H, (mu, unit_std) = loadings_for_factor(
         model, splits, labels_cluster, cluster, layer, j, device)
-    norm2 = float(np.sum((s_h * unit_std) ** 2)) or 1e-12
+    # raw-space minimum-norm direction: g = s_h / sigma, dh = delta*g/||g||^2
+    # achieves the factor-score change delta exactly (verified below).
+    g = np.divide(s_h, unit_std, out=np.zeros_like(s_h), where=unit_std > 0)
+    g_norm2 = float(np.sum(g * g)) or 1e-12
+    d_raw = g / g_norm2
     cohort_idx = np.flatnonzero(test_cluster == cluster)
     img_idx = int(cohort_idx[0]) if len(cohort_idx) else 0
     x0 = splits["test_x"][torch.tensor([img_idx])]
     with torch.no_grad():
         logits, ih1, ih2, ih3 = model.hidden_states(x0.to(device))
     base_h = {1: ih1, 2: ih2, 3: ih3}[layer]
-    d_std = s_h / norm2  # standardized-space unit-coordinate direction
     images = []
     for delta in DELTAS:
+        step = (delta * d_raw)[None, :]
+        achieved = float(s_h @ (delta * d_raw / unit_std))
+        if abs(achieved - delta) > 1e-4 * max(abs(delta), 1e-6):
+            raise AssertionError(
+                f"panel perturbation achieves dz={achieved} for delta={delta}")
         h_raw_pert = base_h + torch.as_tensor(
-            (delta * unit_std * d_std)[None, :], dtype=base_h.dtype,
-            device=base_h.device)
+            step, dtype=base_h.dtype, device=base_h.device)
         cur = h_raw_pert.to(device)
         if layer == 1:
             cur = torch.relu(model.bn2(model.fc2(cur)))

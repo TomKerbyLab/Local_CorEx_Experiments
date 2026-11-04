@@ -15,9 +15,10 @@ Primary summaries (per spec, as pre-registered in paper/exp4.md):
   New coverage/effective-units tables: short factor retention, zero-effect
   interventions, no-silent-exclusion guarantees, effective unit counts.
 
-Uncertainty: model seed is the primary unit; a hierarchical bootstrap
-(resample seeds, then clusters within seeds) is used for factor-level
-distributions.
+Uncertainty: model seed is the primary unit (across-seed summaries with
+small-sample intervals). A cluster-sampling bootstrap was removed in the
+round-4 revision (exp4.md §E4.10): the seed × cluster design is crossed
+(same clusters under every seed), and the nested resampler was unused.
 """
 
 from __future__ import annotations
@@ -412,30 +413,6 @@ def _discovery_cluster_sizes(store) -> dict | None:
     return {int(c): int(n) for c, n in counts.items()}
 
 
-def hierarchical_bootstrap(abl: pd.DataFrame, metric: str, n_boot: int = 2000,
-                          seed: int = 1) -> dict:
-    """Bootstrap resampling model seeds, then clusters within seeds, for a
-    factor-level mean."""
-    rng = np.random.default_rng(seed)
-    lc = abl[(abl["method"] == "local_corex")
-             & (abl["input_condition"] == "output_aware")]
-    seeds = lc["model_seed"].unique()
-    stats = []
-    for _ in range(n_boot):
-        vals = []
-        for s in rng.choice(seeds, size=len(seeds), replace=True):
-            sub = lc[lc["model_seed"] == s]
-            clusters = sub["cluster"].unique()
-            chosen = rng.choice(clusters, size=len(clusters), replace=True)
-            for c in chosen:
-                g = sub[sub["cluster"] == c]
-                if len(g):
-                    vals.append(g[metric].mean())
-        stats.append(np.mean(vals) if vals else np.nan)
-    stats = np.asarray(stats, dtype=float)
-    lo, hi = np.nanpercentile(stats, [2.5, 97.5])
-    return {"mean": float(np.nanmean(stats)), "ci_low": float(lo),
-            "ci_high": float(hi)}
 
 
 def main() -> dict:

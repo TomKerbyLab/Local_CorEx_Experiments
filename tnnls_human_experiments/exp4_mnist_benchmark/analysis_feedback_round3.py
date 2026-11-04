@@ -20,18 +20,27 @@ Analyses:
   H. profile cohorts: levels vs excesses, paired own-vs-other contrast
   I. within-digit contrast for mixed clusters
   J. quote checks: per-seed excess, max single-cell shift, density ranges
-  K. extension aggregates + univariate paired diffs (§E4.14.2)
+  K. extension aggregates + univariate paired diffs (§E4.14.2) —
+     AUTHORITATIVE base: the re-run store's exact-mask extension shards,
+     with the full-precision re-evaluated families
+     (extension_summary_fp, reeval_extension_fullprecision.py) spliced in
+     (decisions #24/#29)
+  L. per-layer, per-seed association correlations (round-4 presentation
+     item)
+  M. mixed-cluster cohort counts + per-seed within-digit contrasts
+     (round-4 §E4.14.1 item 4)
 """
 from __future__ import annotations
 
 import glob
 import json
+import os
 import sys
 import collections
 import numpy as np
 import pandas as pd
 
-HERE = __file__ and __import__("os").path.dirname(__file__)
+HERE = os.path.dirname(os.path.abspath(__file__))
 RAW = HERE + "/run_results/raw/mnist"
 RES = HERE + "/results"
 
@@ -133,10 +142,20 @@ def main():
     try:
         from common import metrics as M
         from common import seeds as S
+        # full-precision vectors when the round-4 re-eval has saved them;
+        # else the stored (rounded) vectors
+        npz_path = RES + "/factor_hidden_mi_full_precision.npz"
+        vec = np.load(npz_path) if os.path.exists(npz_path) else None
         RC = []
         for _, row in fac[fac.input_condition == "output_aware"].iterrows():
-            hmi = np.array(json.loads(row["hidden_mi_vector"]))
             vm = np.array(json.loads(row["valid_mask"]), dtype=bool)
+            if vec is not None:
+                hmi = vec[f"{int(row.model_seed)}:{int(row.cluster)}:"
+                          f"{int(row.layer)}:{int(row.factor_index)}"]
+                src = "full-precision"
+            else:
+                hmi = np.array(json.loads(row["hidden_mi_vector"]))
+                src = "rounded-stored"
             s_tie = int(S.derive_seed(int(row["corex_seed"]), "support_ties"))
             sup99 = M.nested_supports(hmi, [0.99], vm)[0]
             sup95 = M.nested_supports(hmi, [0.95], vm)[0]
@@ -147,6 +166,7 @@ def main():
                            set99=frozenset(int(i) for i in sup99.indices),
                            set95=frozenset(int(i) for i in sup95.indices)))
         RC = pd.DataFrame(RC)
+        print(f"MI source: {src}, n={len(RC)}")
         selfj = RC.apply(lambda r: len(r.set95 & r.set99) / len(r.set99), axis=1)
         print(f"self-J (0.95 vs 0.99, exact masks): median {selfj.median():.3f}; "
               f"size-ratio s95/s99 median {(RC.s95/RC.s99).median():.3f}")
@@ -338,12 +358,26 @@ def main():
                                                 sz=("support_size", "mean"))
     print(g.round(3).to_string())
 
-    print("\n== K. extension aggregates + univariate diffs (§E4.14.2)")
-    e = ext[(ext.method == "local_corex") & (ext.input_condition == "output_aware")]
+    print("\n== K. AUTHORITATIVE extension aggregates + univariate diffs "
+          "(§E4.14.2: exact-mask re-run + full-precision-corrected families)")
+    ext_key = ["model_seed", "cluster", "layer", "input_condition",
+               "factor_index", "threshold", "method", "random_draw"]
+    auth = ext
+    fpsh = sorted(glob.glob(RAW + "/*extension_summary_fp*.parquet"))
+    if fpsh:
+        fp = pd.concat([pd.read_parquet(f) for f in fpsh], ignore_index=True)
+        auth = pd.concat([
+            ext[~ext.set_index(ext_key).index.isin(
+                fp.set_index(ext_key).index)], fp], ignore_index=True)
+        print(f"  (spliced {len(fp)} full-precision-corrected rows from "
+              f"{len(fpsh)} shards)")
+    e = auth[(auth.method == "local_corex")
+             & (auth.input_condition == "output_aware")]
     print(e.groupby(["threshold", "layer"]).agg(
         T_max=("T_max", "mean"), H_in=("H_input", "mean"),
         prev=("substantial_class_concentrated", "mean")).round(3).to_string())
-    uv = ext[(ext.method == "univariate") & (ext.input_condition == "output_aware")]
+    uv = auth[(auth.method == "univariate")
+              & (auth.input_condition == "output_aware")]
     mk = ["model_seed", "cluster", "layer", "factor_index", "threshold"]
     d = e.set_index(mk)[["T_max", "H_input"]].rename(
         columns={"T_max": "lc_T", "H_input": "lc_H"}).join(
@@ -353,6 +387,56 @@ def main():
         lambda x: pd.Series({"dT": (x.lc_T - x.uv_T).mean(),
                              "dH": (x.lc_H - x.uv_H).mean()}))
     print(gg.round(4).to_string())
+
+    print("\n== L. per-layer, per-seed association correlations (round 4)")
+    fkey = fac.set_index(key4)
+    for th in (0.8,):
+        s = lc_all[(lc_all.input_condition == "output_aware")
+                   & (lc_all.threshold == th)].copy()
+        s["assoc"] = [float(fkey.loc[(r.model_seed, r.cluster, r.layer,
+                                      "output_aware", r.factor_index)]
+                            [f"logit_mi_{int(r.dominant_logit)}"])
+                      for r in s.itertuples()]
+        for layer in (1, 2, 3):
+            row = []
+            for sd, gs in s[s.layer == layer].groupby("model_seed"):
+                r1 = gs.assoc.rank().corr(gs.T_max.rank())
+                r2 = gs.assoc.rank().corr(gs.H_input.rank())
+                row.append(f"{sd}: {r1:+.2f}/{r2:+.2f}")
+            print(f"  q={th} L{layer} (assoc/T_max | assoc/H_input): "
+                  + "  ".join(row))
+
+    print("\n== M. mixed-cluster cohort counts + per-seed within-digit "
+          "contrasts (round 4)")
+    spz = np.load(RAW + "/mnist_splits.npz", allow_pickle=True)
+    ntest = np.bincount(np.asarray(spz["test_y"], dtype=int), minlength=10)
+    for c in sorted(mix):
+        dd = dom_digit[c]
+        print(f"  cluster {c} (dominant {dd}) test composition: "
+              + ", ".join(f"{d}:{n}" for d, n in enumerate(comps[str(c)]) if n))
+        for layer in (1, 2, 3):
+            sub = m[(m.cluster == c) & (m.layer == layer)
+                    & (m.input_condition == "output_aware")]
+            for dgt in range(10):
+                inm = (sub.eval_cluster == c) & (sub.true_class == dgt)
+                if not inm.any():
+                    continue
+                otm = (~inm) & (sub.true_class == dgt)
+                per_seed = []
+                for sd, gs in sub.groupby("model_seed"):
+                    i = (gs.eval_cluster == c) & (gs.true_class == dgt)
+                    o = (~i) & (gs.true_class == dgt)
+                    din = (gs[i].diffc * gs[i].n_images_lc).sum() \
+                        / max(gs[i].n_images_lc.sum(), 1)
+                    dout = (gs[o].diffc * gs[o].n_images_lc).sum() \
+                        / max(gs[o].n_images_lc.sum(), 1) if o.any() else np.nan
+                    per_seed.append(din - dout)
+                nin = int(sub[inm].n_images_lc.iloc[0])
+                nout = int(ntest[dgt]) - nin
+                print(f"    L{layer} digit {dgt}: in_n={nin} out_n={nout} "
+                      f"paired diff per seed: "
+                      + "/".join(f"{v:+.3f}" for v in per_seed)
+                      + f" (mean {np.nanmean(per_seed):+.3f})")
 
 
 def refit_check():
