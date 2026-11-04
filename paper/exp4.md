@@ -31,7 +31,14 @@ round-4 fixes and raised three remaining consistency items (a
 mis-quoted per-seed range, a now-overreached mixed-cluster
 interpretation, and an inaccurate change summary) plus small edits;
 all verified first, then adopted as **[rev5]** (§E4.15, decisions
-#35–39). The consolidated account of record is §E4.16.
+#35–39). The consolidated account of record is §E4.16. Round 6
+(2026-11-04, current version) confirmed the round-5 items resolved;
+its remaining scope-preserving edits — the layer magnitude/concentration
+distinction, analysis-scope qualifiers in the account of record, the
+mixed-cluster "small" intro, and the change-ledger completion (the H3
+entropy range) + removal of the blanket "remaining values unchanged"
+claim — were all verified first, then adopted as **[rev6]** (§E4.15,
+decisions #40–43).
 
 ## E4.1 Motivation and role in the program
 
@@ -790,8 +797,11 @@ At q = 0.8, factors split into 15.3% **strong & class-selective**
 under this probe** (T_max < 0.10); by layer (L1/L2/L3): 6.0/20.4/19.4%
 strong & selective, 4.0/0.8/2.6% strong & broad. The same split at q =
 0.9: 5.8/37.6/37.0% strong & selective and 34.8/5.0/16.2% strong &
-broad — the layer story of Finding 3 rests on class concentration, not
-on H1 factors being inert. Discovery-side association strength
+broad — the layer story reflects both magnitude and class-concentration
+differences, and shows H1 factors are not inert [rev6 — the round-3
+"rests on class concentration, not…" was too absolute: mean T_max also
+differs across layers (0.113/0.171/0.155 at q = 0.9)]. Discovery-side
+association strength
 (dominant-class logit MI in bits) relates to magnitude and
 concentration separately: full-set Spearman(assoc, T_max) = +0.60 vs
 Spearman(assoc, H_input) = −0.57 at q = 0.8 — **[rev4]** present in
@@ -901,8 +911,10 @@ corrected):**
    that digit inside/outside the fit cluster — **[rev4]** both counts
    now printed), with the per-seed paired
    within-digit contrast quoted. For the mixed clusters' **dominant**
-   digits (well-populated cohorts) the contrast is small and
-   **sign-varies across clusters**: cluster 0, digit 9 (in_n 485,
+   digits (well-populated cohorts), magnitudes and signs vary across
+   clusters and layers **[rev6 — the introductory "small" is removed;
+   the conclusion below carries the supported statement]**: cluster 0,
+   digit 9 (in_n 485,
    out_n 524):
    0.010 vs 0.015 at H1 (contrast −0.005; per-seed −0.010 to +0.000
    **[rev5]** — the round-3 text quoted an erroneous range −0.003 to
@@ -1000,9 +1012,15 @@ reconstructed validity) versus the **authoritative recomputation** (re-run
 store + full-precision corrections, `analysis_feedback_round3.py` §K).
 Changed at quoted precision: H_input at H2/q = 0.95 = 0.5372 → quoted
 **0.54** (was 0.53); H3 LC-minus-univariate ΔT_max **+0.047–0.069** (was
-+0.049–0.070); mean q = 0.99 support density **0.53** (was 0.52, medians
-now 0.38 → 0.59, was 0.37 → 0.58). Unchanged at quoted precision: the
-T_max means, prevalences, and all remaining §E4.14.2 values. Remaining approximations in the authoritative base: none for
++0.049–0.070); H3 LC-minus-univariate ΔH_input **−0.047–−0.110** (was
+−0.048–−0.110; **[rev6]** added — the round-5 ledger missed it, and the
+item-3 text now carries the authoritative value); mean q = 0.99 support
+density
+**0.53** (was 0.52, medians
+now 0.38 → 0.59, was 0.37 → 0.58). **[rev6]** No blanket claim is made
+about the remaining values: they were spot-checked rather than
+machine-diffed, so the authoritative tables (and the recomputation
+scripts' outputs) are the record of record for them. Remaining approximations in the authoritative base: none for
 validity (exact masks); support construction uses the **full-precision
 vectors** for the corrected families and the 6-decimal-rounded stored
 vectors elsewhere (verified identical except the 15 corrected cases —
@@ -1100,7 +1118,7 @@ adopted):**
 | 15 | Round-1 coarse in-cluster row | Kept as one descriptive paragraph (skewed r_dom distribution), never a finding |
 
 Experiment 4 records: the pre-registered grid was run in full and
-reviewed five times; the readings, the layer-level perturbation statement,
+reviewed six times; the readings, the layer-level perturbation statement,
 and the cross-experiment cross-references are recorded in this document
 (§E4.12–§E4.16 **[rev3]**, replacing the nonexistent "E4.4–E4.4.4" range)
 and the committed results directory.
@@ -1161,6 +1179,16 @@ against the code and the committed tables, then adopted — decisions
 | 37 | Change-summary accuracy | The blanket "every other number unchanged" replaced by the explicit, baseline-identified list of quoted-precision changes (H2/q = 0.95 H_input 0.53 → 0.54; H3 univariate ΔT_max +0.049–0.070 → +0.047–0.069; mean q = 0.99 density 0.52 → 0.53, medians 0.38 → 0.59) (§E4.14.2) |
 | 38 | Small edits | §E4.6 now states the COMPLETED full-precision storage and re-evaluation (the follow-up wording moved to execution history); §E4.14.2's ending no longer implies construction-based non-specificity ("broad-support deletion whose behavioral specificity is measured by the reported outcomes"); σ_Z pinned to the hidden-coordinate score the code perturbs (§E4.13) |
 | 39 | Methods vs history | The account of record — the final procedure and results in one consolidated reader-facing statement — added to §E4.16, separating the current state from the round-by-round revision trail |
+
+**Round-6 adoptions (2026-11-04, sixth review — scope/consistency edits
+only; decisions #40–43):**
+
+| # | Item | Resolution |
+|---|---|---|
+| 40 | Layer summary | "The layer signal is class concentration, not magnitude" removed as too absolute; both magnitude and concentration differ across layers (mean T_max 0.113/0.171/0.155 at q = 0.9); the supported point: H1 carries substantial influence, often spread across classes, and low H1 prevalence under the joint criterion is not evidence of inactivity (§E4.16 result 3, §E4.14 display) |
+| 41 | Account-of-record scope qualifiers | OA-vs-HO similarity scoped to q = 0.8 (exploratory); controls specified (20 random per output-aware support, 5 per hidden-only; hidden-only = random controls only at q = 0.8); the q = 0.95/0.99 results labeled exploratory in the results summary; "modest and method-sensitive" retained for the TC–magnitude association; "every metric" replaced by the six reported magnitude/concentration summaries with their aggregation level stated, plus a scope note for metrics not individually summarized |
+| 42 | Mixed-cluster intro | The "contrast is small" introduction removed from §E4.14.1 item 4: magnitudes and signs are described as varying across clusters and layers; the conclusion already states the supported result (a small overall locality contrast coexisting with meaningful conditional differences) |
+| 43 | Change ledger | H3 LC-minus-univariate ΔH_input −0.048–−0.110 → −0.047–−0.110 added to the quoted-precision changes (the round-5 ledger omitted it; item 3's text verified as already carrying the authoritative value); the blanket "all remaining values unchanged" claim removed — remaining values were spot-checked, not machine-diffed, so the authoritative tables are the record of record |
 ## E4.16 Experiment 4: what the pre-registered readings gave (the synthesis)
 
 Readings: (1) matched-random control — strongly supported; (2) univariate
@@ -1194,18 +1222,26 @@ standardized logits), top-5 positive-TC factors; cumulative-MI supports
 at q ∈ {0.6, 0.7, 0.8, 0.9} (supplementary 0.95/0.99) built from the fit's
 full-precision MI (stored full-precision and rounded vectors verified
 mutually consistent; regenerated primary supports match the stored
-exactly); matched-random (20×), univariate (OA), and hidden-only (q =
-0.8) controls; the frozen evaluator (activation masking, trunk path,
+exactly); matched-random controls (20 per output-aware support, 5 per
+hidden-only one), univariate controls (output-aware only), and the
+hidden-only arm at q = 0.8; the frozen evaluator (activation masking,
+trunk path,
 eval mode) on all 10,000 test images; 141,000 + 66,000 intervention
 evaluations, zero failures (store tables `mnist_*`;
 `analysis_feedback_round3.py`, `reeval_extension_fullprecision.py`
 reproduce every number below).
 
-*Results (final, all [rev5]-verified from the authoritative store).*
-(1) LC supports beat size-matched random deletion on every metric at
-every layer and threshold (e.g. per-seed H2/q = 0.9 T_max excesses
+*Results (final, all verified from the authoritative store [rev6]).*
+(1) LC supports produce larger and more class-concentrated shifts than
+size-matched random deletion on all six reported magnitude/concentration
+summaries (T_max, T_weighted, U_max, flip rate, H_input, D_input) at
+every layer × threshold × seed stratum (e.g. per-seed H2/q = 0.9 T_max
+excesses
 0.170/0.184/0.162/0.168/0.147 vs random ≈ 0.006); matched-random
-deletion of the same sizes is behaviorally inert. (2) The dose-response
+deletion of the same sizes is behaviorally inert. **[rev6]** (The
+document defines further metrics not individually summarized; claim
+scoped to the reported summaries.) (2) [Exploratory extension]
+**[rev6]** The dose-response
 through q = 0.95 raises T_max (0.113/0.171/0.155 at q = 0.9 → 0.215/
 0.250/0.254) without a class-concentration penalty (mean H_input falls);
 at q = 0.99 specificity declines, especially at H3 (prevalence
@@ -1215,13 +1251,19 @@ Jaccard ≈ its same-size random reference). (3) Layer structure: at q =
 0.9 prevalence passes the conjunctive criterion mostly at H2/H3
 (0.376/0.370 vs H1 ≤ 0.06) — but H1 is not inert: 34.8% of H1 factors
 are strong-but-broad (T_max ≥ 0.10, H_input > 0.50) and per-image
-effects are real; the layer signal is class concentration, not
-magnitude. (4) LC beats the univariate control where the gap grows (H3:
-ΔT_max +0.006 → +0.053, ΔH_input −0.02 → −0.12 across q); at H1/H2 the
-differences are within ±0.021/±0.011, sign-mixed. (5) Including logits
+effects are real; **[rev6]** both magnitude and class concentration
+differ across layers (mean T_max 0.113/0.171/0.155), so the low H1
+prevalence under the joint criterion reflects concentration more than
+inactivity — it is not evidence of inactivity. (4) At q = 0.8 LC beats
+the univariate control clearly only at H3, with the gap growing in q
+(H3: ΔT_max +0.006 → +0.053, ΔH_input −0.02 → −0.12 from q = 0.6 to
+0.9); at H1/H2 the
+differences are within ±0.021/±0.011, sign-mixed. **[rev6]** (5)
+[Exploratory extension; q = 0.8] **[rev6]** Including logits
 in the fit changes neither excess meaningfully (≤ 0.006 in T_max
 excess) and keeps the framing label-free. (6) TC and intervention
-magnitude are associated after the size adjustment (partial Spearman
+magnitude are modestly and method-sensitively associated after the size
+adjustment **[rev6]** (partial Spearman
 −0.01–0.32; size-band medians 0.12–0.42); association strength relates
 separately to magnitude (+0.32–0.77 per layer-seed cell) and
 concentration (−0.26–−0.65). (7) Directional concordance tracks layer
