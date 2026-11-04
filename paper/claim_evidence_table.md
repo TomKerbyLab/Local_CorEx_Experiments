@@ -93,7 +93,7 @@ before it enters prose.
 |---|---|
 | Size-matched random supports | ✅ ran (120,000 + 7,500 + 66,000 rows) — LC favorable everywhere |
 | Univariate logit-association supports | ✅ ran (6,000 rows) — favorable H3 only |
-| **Global CorEx supports** | ⚠ **not run** — the gap the reviewer's #2 targets; scheduled (plan §7-B); the current E4 doc's exclusion (decision 8) must be reversed explicitly in §6 prose |
+| **Global CorEx supports** | ✅ **RUN** (branch `exp4-global-arm`, 5 seeds × {M=10 per-fit-parity, M=100 budget-matched} × 3 layers × both input conditions; paired vs 20 size-matched randoms; per-cluster TV recorded). First reading: global-selected groups substantially exceed their size-matched randoms in effect size and class concentration nearly everywhere (e.g. output-aware L2 M=10 q=0.9: ΔT_max +0.762, CI [0.675, 0.849]), but the *H3* contrast vs randoms is small (+0.03 vs the local arm's H3-specificity finding) — localization's payoff concentrates exactly where the E4 account said it does. Cross-arm (global vs local) size-matched comparison is the E4-doc addendum's remaining step |
 | Simple alternative grouping | not run (priority below global-CorEx, above Bio per feedback) |
 
 ### R2.3 E5 (ImageNet validation)
