@@ -49,12 +49,14 @@ before it enters prose.
 | Capability diagnostic | default-init EM reaches optimum at n=500 (TC 0.45–0.60) but collapses at n=5000 (0.0000 bits in 8/8 replicates at d=3,4); atom-seeded init reaches analytic TC (0.498–0.522, SE ≤ 0.017) → **optimization, not expressiveness** (consistent-with, not proof — the three-distinction wording) |
 | Source | same notebook cells 3, 6; `exp3.md` Finding 7 |
 
-### R1.4 Global-capacity controls
+### R1.4 Global-capacity controls — RUN (fills the reviewer's factor-budget objection)
 
 | Item | Value |
 |---|---|
-| Status | ⚠ **MISSING DATA**: code committed (`gaussian/capacity_experiment.py`, `AI_implemented/exp2_nonlinear/capacity_experiment.py`, commit 5e653b0) but no committed result files. The reviewer requires main-text treatment of the factor-budget objection (localized ≈ 21–31 fits vs 1 global); this must be run to fill the cell |
-| Source | commit 5e653b0; plan §7-C |
+| Result | Apples-to-apples at equal **total factor budget** (global single fit vs the budget-matched stack of the two local fits, identical support sets and Hungarian/cosine matching): disjoint — global M=5 **0.880** vs local-pooled **1.000** (paired Δ −0.120, SE 0.013, n=16); M=10 global **0.909** vs local **0.996** (Δ −0.088, SE 0.013). Nondisjoint — M=5 both **1.000** (tie); M=10 global **0.649** vs local **0.992** (Δ −0.344, SE 0.022) |
+| Interpretation | Localized fits beat global at the same factor budget, so the localization gain is not explained by the local arm's larger budget; in the homogeneous case localization adds nothing (consistent with the informative-partition condition); the nondisjoint non-monotonicity (global degrades from M=5 to M=10) is reported as an observed capacity/estimator behavior, not smoothed over |
+| Units | 32 conditions × 16 paired replicates, budget ∈ {5,10}, both covariance setups, linear estimator |
+| Source | `tnnls_human_experiments/gaussian/capacity_data/global_capacity/global_capacity_combined.csv` (generated from committed code, commit 5e653b0; summarise via `summarize_gaussian.py` conventions) |
 
 ## The interpretive gap (E3) — TC is type-blind
 
@@ -105,7 +107,7 @@ groups contribute to which predictions, not downstream synergy.
 
 ## MISSING / unresolved (blocks specific table cells, not the drafting of E1–E4)
 
-1. **E1/E2 global-capacity control grids unrun** (code committed) — needs execution to answer the factor-budget objection in main text.
+1. ~~**E1/E2 global-capacity control grids unrun**~~ — **E1 grid RUN** (results above; commit pending to the Gaussian branch); **E2 capacity grid still pending** if the nonlinear capacity objection is to be answered with data rather than the E1 analogue.
 2. **E2 verdict convention** — pooled vs per-condition best-match flips the sine-sum H1 verdict class; resolve and freeze before §4 prose (both readings carried above in the interim).
 3. **E4 global CorEx arm** — not run; scheduled.
 4. E3 per-cell CI tables — prose ranges + committed CSVs suffice for the table; formal per-cell table needs one pass over `core_info_summary.csv` if wanted.

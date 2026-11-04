@@ -1,0 +1,2 @@
+{"utc": "2026-11-04T20:40:00+00:00", "event": "run_start", "experiment": "global_capacity", "repetitions": 16}
+{"utc": "2026-11-04T20:40:35+00:00", "event": "run_end", "experiment": "global_capacity", "status": "completed", "conditions_written": 32, "conditions_skipped": 0, "elapsed_s": 34.443}
