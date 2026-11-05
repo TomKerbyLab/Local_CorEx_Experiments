@@ -1,0 +1,24 @@
+{
+  "config": {
+    "ablations_max_workers": 16,
+    "cache_batch_size": 256,
+    "fits_max_workers": 16,
+    "n_clusters": 100,
+    "n_factors": 10,
+    "n_random_controls": 5,
+    "primary_q": 0.8,
+    "verify_n_per_class": 2
+  },
+  "experiment": "imagenet",
+  "run_id": "imagenet.7caecff243.0",
+  "stages": [
+    "cache",
+    "verify",
+    "splits",
+    "clusters",
+    "fits",
+    "ablations",
+    "case_study",
+    "summarize"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "n_check": 2000,
+  "n_per_class": 2,
+  "atol": 0.0001,
+  "max_feature_absdiff": 4.3392181396484375e-05,
+  "mean_feature_absdiff": 1.62389846991573e-06,
+  "max_logit_absdiff": 3.62396240234375e-05,
+  "mean_logit_absdiff": 3.690623316288111e-06,
+  "frac_logit_within_atol": 1.0,
+  "frac_feature_within_atol": 1.0,
+  "label_match_rate": 1.0,
+  "verified": true,
+  "runtime_s": 17.204392433166504
+}
