@@ -122,7 +122,7 @@ def fit_bio(V, n_hidden, seed, tag, timeout_s: float = 300.0) -> dict:
         "n_hidden": n, "seed": int(seed),
         "runtime_s": round(dt, 2),
         "rss_peak_mb": round((_rss_kb() - rss0) / 1024.0, 1),
-        "py_peak_mb": round(mem_out.value, 1),
+        "py_peak_mb": round(mem_out[0], 1),
         "converged": bool(finite.all()),
         "n_degenerate": int((~finite).sum()),
         "total_tc_bits": (float(np.nansum(active)) * NATS_TO_BITS
