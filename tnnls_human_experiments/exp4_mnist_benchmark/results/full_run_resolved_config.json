@@ -1,0 +1,38 @@
+{
+  "config": {
+    "input_conditions": [
+      "output_aware",
+      "hidden_only"
+    ],
+    "layers": [
+      1,
+      2,
+      3
+    ],
+    "model_seeds": [
+      5100,
+      5101,
+      5102,
+      5103,
+      5104
+    ],
+    "n_clusters": 20,
+    "n_factors": 10,
+    "n_random_controls": 20,
+    "n_random_controls_hidden_only": 5,
+    "n_retained": 5,
+    "support_thresholds": [
+      0.6,
+      0.7,
+      0.8,
+      0.9
+    ]
+  },
+  "run_id": "mnist.3d97ba99ce.0",
+  "stages": [
+    "clusters",
+    "fits",
+    "ablations",
+    "shifts"
+  ]
+}

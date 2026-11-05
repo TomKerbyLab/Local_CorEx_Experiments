@@ -8,10 +8,13 @@ import torch
 
 from tnnls_experiments.common import metrics, seeds
 from tnnls_experiments.exp4_mnist.benchmark import (
-    TrunkEvaluator, build_discovery_clusters, fit_and_rank,
-    run_ablation_stage_for_factor, standardize_with_flags, univariate_support)
+    TrunkEvaluator, build_discovery_clusters, effective_n_units, center_logits,
+    fit_and_rank, posthoc_logit_mi, run_ablation_stage_for_factor,
+    standardize_with_flags, tc_rank_order, univariate_support)
 from tnnls_experiments.exp4_mnist.classifier import MLP
-from tnnls_experiments.exp4_mnist.interventions import predict_proba
+from tnnls_experiments.exp4_mnist.interventions import (
+    classwise_mean_probs, classwise_shift_matrix, individual_effect_metrics,
+    predict_proba)
 
 
 def _trained_tiny_model(n=2000, epochs=3, seed=0):
@@ -172,3 +175,286 @@ def test_smoke_benchmark_end_to_end(tmp_path, monkeypatch):
             ["model_seed", "cluster", "layer", "input_condition",
              "factor_index", "threshold"]):
         assert grp["support_size"].nunique() == 1
+
+
+def _latent_block_data(n=400, n_h=40, seed=1):
+    """Hidden coords driven by 3 latents; logit 3 correlates with latent 0."""
+    rng = np.random.default_rng(seed)
+    z = rng.standard_normal((n, 3))
+    cols = [z[:, j % 3] + 0.5 * rng.standard_normal(n) for j in range(n_h)]
+    H = np.stack(cols, axis=1)
+    L = np.stack([rng.standard_normal(n) for _ in range(10)], axis=1)
+    L[:, 3] = z[:, 0] + 0.2 * rng.standard_normal(n)
+    return H, L
+
+
+def test_tiny_cluster_excluded_from_grid(tmp_path, monkeypatch):
+    # Predeclared tiny-cluster rule: clusters with < MIN_CLUSTER_OBS
+    # discovery observations define no fits and no interventions, and the
+    # exclusion is visible, never silent padding.
+    from tnnls_experiments.common import config as cfg_mod, store as store_mod
+    monkeypatch.setattr(cfg_mod, "RAW_DIR", tmp_path)
+    monkeypatch.setattr(store_mod, "RAW_DIR", tmp_path)
+    (tmp_path / "mnist").mkdir(parents=True, exist_ok=True)
+
+    model, xs, ys = _trained_tiny_model(n=1200, epochs=2)
+    import torch as T
+    splits = {
+        "discovery_x": xs[:1000], "discovery_y": T.tensor(ys[:1000]),
+        "test_x": xs[1000:], "test_y": T.tensor(ys[1000:]),
+    }
+    store = store_mod.ResultStore("mnist")
+    labels_cluster = np.array([0] * 940 + [1] * 60)  # cluster 1 is tiny
+    cfg = {
+        "n_factors": 3, "n_retained": 2, "support_thresholds": [0.6],
+        "n_random_controls": 2, "n_random_controls_hidden_only": 1,
+        "input_conditions": ["output_aware"], "layers": [3],
+        "n_clusters": 2,
+    }
+    from tnnls_experiments.exp4_mnist.benchmark import (MIN_CLUSTER_OBS,
+                                                        run_fit_stage,
+                                                        run_ablation_stage)
+    assert MIN_CLUSTER_OBS == 100
+    run_fit_stage(99, splits, labels_cluster, model, "cpu", store, cfg)
+    factors = store.read_all("factors")
+    assert set(factors["cluster"]) == {0}   # tiny cluster has no fits
+    run_ablation_stage(99, splits, labels_cluster, model, "cpu", store, cfg)
+    from tnnls_experiments.exp4_mnist.summarize import coverage
+    cov = coverage(store.read_all("ablation_summary"), factors,
+                   cluster_sizes={0: 940, 1: 60})
+    assert cov.attrs["tiny_clusters_excluded"] == {1: 60}
+    assert "excluded [1]" in cov.attrs["note"]
+
+
+def test_assignment_checks_synthetic():
+    # Machinery check on synthetic blobs with an identity PHATE stub: the
+    # self-transform agreement and kNN-consistency rates are computed and
+    # aligned (blobs separated; k-means recovers the blocks).
+    from sklearn.cluster import KMeans
+
+    from tnnls_experiments.exp4_mnist.benchmark import (
+        TEST_ASSIGNMENT_CHECK_SUBSET, assignment_checks)
+
+    class _IdentityPHATE:
+        def transform(self, X):
+            return np.asarray(X, dtype=float)
+
+    rng = np.random.default_rng(0)
+    centers = rng.standard_normal((3, 10)) * 8
+    emb_disc = np.vstack([centers[c] + rng.standard_normal((200, 10))
+                          for c in range(3)])
+    km = KMeans(3, n_init=3, random_state=0).fit(emb_disc)
+    labels_fit = km.labels_
+    emb_test = np.vstack([centers[c] + rng.standard_normal((50, 10))
+                          for c in range(3)])
+    # the assignment under test: k-means labels from the fitted object
+    labels_test = km.predict(emb_test)
+    checks, dist, ind = assignment_checks(
+        emb_disc, labels_fit, _IdentityPHATE(), km, emb_disc, emb_test,
+        labels_test, emb_test)
+    assert checks["self_transform_agreement"] == pytest.approx(1.0)
+    assert checks["knn_consistency"] > 0.9
+    assert checks["n_self_check"] == len(emb_disc) // TEST_ASSIGNMENT_CHECK_SUBSET
+    assert dist.shape == (150, 1) and ind.shape == (150, 1)
+
+
+def test_reconstruct_supports_at():
+    # Extension supports: rebuilt from a stored MI vector with the same
+    # neutral-tie machinery; zero-MI coordinates never selected; extension
+    # thresholds nest with the primary ones (verified against q=0.9 built
+    # the same way).
+    rng = np.random.default_rng(0)
+    scores = np.abs(rng.normal(size=100))
+    scores[7] = 0.0                      # excluded coordinate (zero-MI)
+    valid_from_mi = scores != 0.0
+    from tnnls_experiments.exp4_mnist.benchmark import reconstruct_supports_at
+    ext = reconstruct_supports_at(scores, valid_from_mi, [0.95, 0.99], 123)
+    prim = reconstruct_supports_at(scores, valid_from_mi, [0.9], 123)
+    assert all(7 not in s.indices for s in ext + prim)
+    assert set(prim[0].indices) <= set(ext[0].indices) <= set(ext[1].indices)
+    assert ext[0].size <= ext[1].size
+    assert np.allclose(ext[1].scores,
+                       [scores[i] for i in ext[1].indices])
+
+
+def test_profiles_stage_machinery(tmp_path, monkeypatch):
+    # Profile grids: LC + random_mean per factor, 200 cells, valid stats;
+    # random-mean magnitudes are near the per-image null level.
+    from tnnls_experiments.common import config as cfg_mod, store as store_mod
+    monkeypatch.setattr(cfg_mod, "RAW_DIR", tmp_path)
+    monkeypatch.setattr(store_mod, "RAW_DIR", tmp_path)
+    (tmp_path / "mnist").mkdir(parents=True, exist_ok=True)
+
+    model, xs, ys = _trained_tiny_model(n=1200, epochs=2)
+    import torch as T
+    splits = {
+        "discovery_x": xs[:1000], "discovery_y": T.tensor(ys[:1000]),
+        "test_x": xs[1000:], "test_y": T.randint(0, 10, (200,)),
+    }
+    store = store_mod.ResultStore("mnist")
+    labels_cluster = np.array([0] * 1000)  # one cluster
+    test_cluster = np.tile(np.arange(20), 10)  # 200 test images, 20 cohorts
+    cfg = {"n_factors": 3, "n_retained": 2, "support_thresholds": [0.8],
+           "n_random_controls": 4, "n_random_controls_hidden_only": 2,
+           "input_conditions": ["output_aware"], "layers": [3],
+           "n_clusters": 1}
+    from tnnls_experiments.exp4_mnist.benchmark import (
+        run_fit_stage, run_profiles_stage)
+    run_fit_stage(99, splits, labels_cluster, model, "cpu", store, cfg)
+    run_profiles_stage(99, splits, labels_cluster, test_cluster, model,
+                       "cpu", store, cfg)
+    pr = store.read_all("profiles")
+    assert set(pr.method) == {"local_corex", "random_mean"}
+    for _, grp in pr.groupby(["factor_index", "method"]):
+        # one row per occupied (cohort, true-class) cell, sizes sum to test N
+        assert grp.n_images.sum() == 200 and (grp.n_images >= 1).all()
+    expected_pairs = {(int(c), int(d)) for c, d in
+                      zip(test_cluster, splits["test_y"].numpy())}
+    got = set(zip(pr[pr.method == "local_corex"].eval_cluster,
+                  pr[pr.method == "local_corex"].true_class))
+    assert got == expected_pairs
+    assert (pr.a_mean >= 0).all() and pr.flip_rate.between(0, 1).all()
+    # LC profile rows carry the key fields
+    assert {"layer", "input_condition", "threshold", "dominant_logit"} \
+        <= set(pr.columns)
+
+
+def test_posthoc_logit_mi_identifies_associated_logit():
+    # Hidden-only fit + post-hoc association: every factor built from latent
+    # 0-family tracks logit 3, and that logit dominates for those factors.
+    H, L = _latent_block_data()
+    H_std, valid, _ = standardize_with_flags(H)
+    L_std, _, _ = standardize_with_flags(L)
+    fr = fit_and_rank(H_std, None, n_factors=5, seed=7,
+                      n_retained=3, valid_h=valid)
+    assert fr["logit_mis"] is None and fr["dominant"][0] == -1  # pre-posthoc
+    v_idx = np.flatnonzero(valid)
+    mis, dominant, gaps = posthoc_logit_mi(fr["fit"], H_std[:, v_idx], L_std)
+    assert mis.shape == (5, 10) and len(gaps) == 5
+    for j in fr["order"]:
+        assert mis[j].min() >= 0.0 and gaps[j] >= -1e-9
+        if mis[j, 3] >= 0.05:  # substantive association, not sampling noise
+            assert dominant[j] == 3
+            assert mis[j, 3] == pytest.approx(mis[j].max())
+    assert (mis[:, 3] >= 0.05).sum() >= 1  # at least one z0-driven factor
+
+
+def test_fit_excludes_invalid_hidden_columns():
+    # Spec: near-zero-variance coordinates are excluded from CorEx fitting.
+    H, L = _latent_block_data()
+    H[:, 5] = 2.0  # constant column
+    H_std, valid, _ = standardize_with_flags(H)
+    L_std, _, _ = standardize_with_flags(L)
+    assert valid.sum() == H.shape[1] - 1 and not valid[5]
+    fr = fit_and_rank(H_std, L_std, n_factors=5, seed=3,
+                      n_retained=3, valid_h=valid)
+    assert all(np.isfinite(fr["fit"].tcs))
+    assert np.abs(fr["hidden_mis"][:, 5]).max() == 0.0  # zero, not fit
+    sups = metrics.nested_supports(fr["hidden_mis"][int(fr["order"][0])],
+                                   [0.6, 0.8], valid)
+    for s in sups:
+        assert 5 not in s.indices
+
+
+def test_pbar_matrices_consistent_with_delta():
+    # pbar_abl = pbar_base + delta, and baseline rows sum to 1.
+    rng = np.random.default_rng(9)
+    n = 2000
+    labels = rng.integers(0, 10, n)
+    p_base_np = rng.dirichlet(np.ones(10), size=n)
+    p_abl_np = rng.dirichlet(np.ones(10), size=n)  # same marginals family
+    delta = classwise_shift_matrix(p_abl_np, p_base_np, labels)
+    pb0 = classwise_mean_probs(p_base_np, labels)
+    pbA = classwise_mean_probs(p_abl_np, labels)
+    assert np.allclose(pbA, pb0 + delta, atol=1e-9)
+    assert np.allclose(pb0.sum(axis=1), 1.0, atol=1e-9)
+
+
+def test_centered_logits_remove_behaviorally_irrelevant_component():
+    # Softmax invariance: adding a per-image constant leaves predictions.
+    torch.manual_seed(0)
+    m = MLP(dropout_p=0.5).eval()
+    x = torch.rand(128, 784)
+    base = m(x)
+    c = torch.rand(len(x), 1)
+    with torch.no_grad():
+        shifted = torch.softmax(base + c, dim=1)
+    assert torch.allclose(shifted, torch.softmax(base, dim=1), atol=1e-6)
+    # Discovery association: raw logit correlation is polluted by the common
+    # mode; centering removes exactly it.
+    rng = np.random.default_rng(4)
+    n = 400
+    common = rng.standard_normal(n)
+    # H correlates ONLY with the common logit mode (behaviorally irrelevant
+    # under softmax) and with no differential component
+    H = np.stack([common + 0.3 * rng.standard_normal(n)
+                  for _ in range(5)], axis=1)
+    L = np.stack([common + 0.1 * rng.standard_normal(n)
+                  for _ in range(10)], axis=1)
+    corr_raw = np.corrcoef(H[:, 0], L[:, 3])[0, 1]
+    Lc = center_logits(L)  # centering removes the pure common mode
+    assert np.abs(Lc[:, 3]).std() < 0.15  # only the small residual remains
+    corr_cen = np.abs(np.corrcoef(H[:, 0], Lc[:, 3])[0, 1])
+    assert abs(corr_raw) > 0.5 and corr_cen < 0.2
+
+
+def test_individual_effect_metrics_bounds():
+    # U_y >= T_y (triangle inequality); flip rates in [0, 1]; equality case
+    # when every image shifts the same direction.
+    rng = np.random.default_rng(11)
+    n = 1000
+    labels = rng.integers(0, 10, n)
+    p0 = rng.dirichlet(np.ones(10), size=n)
+    pA = rng.dirichlet(np.ones(10), size=n)
+    delta = classwise_shift_matrix(pA, p0, labels)
+    T = 0.5 * np.abs(delta).sum(axis=1)
+    m = individual_effect_metrics(pA, p0, labels)
+    assert np.all(np.array(m["U_per_class"]) >= T - 1e-9)
+    assert 0.0 <= m["flip_rate"] <= 1.0
+    assert m["U_max"] == pytest.approx(max(m["U_per_class"]))
+    # same-direction case: U == T on the affected class
+    p0b = np.full((100, 10), 0.1)
+    pAb = p0b.copy()
+    pAb[:, 3] = 0.05
+    pAb[:, 7] = 0.15
+    labels_b = np.full(100, 4)
+    delta_b = classwise_shift_matrix(pAb, p0b, labels_b)
+    T_b = 0.5 * np.abs(delta_b[4]).sum()
+    mb = individual_effect_metrics(pAb, p0b, labels_b)
+    assert mb["U_per_class"][4] == pytest.approx(T_b, abs=1e-9)
+
+
+def test_tc_rank_order_positive_and_neutral():
+    # Nonpositive-TC factors are never retained; TC ties are broken by the
+    # seeded permutation, deterministically, not by column layout.
+    tcs = np.array([0.0, 0.5, 0.5, -1.0, 0.3, 0.2])
+    order = tc_rank_order(tcs, n_retained=5, tie_seed=42)
+    assert 0 not in order and 3 not in order
+    assert len(order) == 4  # only positive-TC factors
+    order2 = tc_rank_order(tcs, n_retained=5, tie_seed=42)
+    assert np.array_equal(order, order2)       # deterministic given seed
+    assert tcs[order[0]] == pytest.approx(0.5)  # strongest first
+    assert tc_rank_order(np.array([0.0, -0.1]), 5, 1).shape == (0,)
+
+
+def test_effective_n_units_concentrated_vs_uniform():
+    scores = np.zeros(50)
+    valid = np.ones(50, bool)
+    scores[7] = 3.0                      # single dominant unit -> ~1
+    assert effective_n_units(scores, valid) == pytest.approx(1.0, abs=1e-9)
+    scores = np.zeros(50)
+    scores[:10] = 2.0                    # 10 equal units -> ~10
+    assert effective_n_units(scores, valid) == pytest.approx(10.0, rel=1e-9)
+    assert np.isnan(effective_n_units(np.zeros(10), np.ones(10, bool)))
+
+
+def test_removed_activation_magnitude_diagnostic():
+    # The trunk caches per-unit mean |activation|; a large-|h| support has a
+    # larger removal magnitude than a random one of the same size.
+    model, xs, ys = _trained_tiny_model(n=2000, epochs=2)
+    trunk = TrunkEvaluator(model, xs[:500], device="cpu")
+    vals = trunk.unit_magnitude[3]
+    top = list(np.argsort(-vals)[:20])
+    low = list(np.argsort(vals)[:20])  # 20 smallest
+    assert trunk.mean_removed_activation(3, top) > \
+        trunk.mean_removed_activation(3, low)

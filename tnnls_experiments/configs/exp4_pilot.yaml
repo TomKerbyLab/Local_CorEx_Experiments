@@ -1,0 +1,16 @@
+# Experiment 4 FEASIBILITY PILOT (paper/exp4.md SS E4.11): mechanics and
+# computational feasibility only. 2 model seeds x all 20 discovery clusters
+# x layers H1-H3 x one threshold (q=0.80), with the FULL random-control
+# counts so the full-grid cost estimate is honest.
+# Progression to the full grid (exp4_full.yaml) is a user GO decision.
+#   python -m tnnls_experiments.exp4_mnist.benchmark --config this.yaml
+#     --stages clusters,fits,ablations,shifts
+model_seeds: [5100, 5101]
+n_clusters: 20
+layers: [1, 2, 3]
+n_factors: 10
+n_retained: 5
+support_thresholds: [0.80]
+n_random_controls: 20
+n_random_controls_hidden_only: 5
+input_conditions: [output_aware, hidden_only]

@@ -61,6 +61,18 @@ def classwise_shift_matrix(
     return delta
 
 
+def classwise_mean_probs(probs: np.ndarray, labels: np.ndarray) -> np.ndarray:
+    """10x10 matrix of mean probabilities pbar_{y,c}: class-mean probability
+    vector for each true digit y. Complement of classwise_shift_matrix."""
+    out = np.zeros((N_CLASSES, N_CLASSES))
+    for y in range(N_CLASSES):
+        mask = labels == y
+        if mask.sum() == 0:
+            continue
+        out[y] = probs[mask].mean(axis=0)
+    return out
+
+
 def effect_metrics(delta: np.ndarray, n_per_class: np.ndarray) -> dict:
     """All aggregate effect/specificity metrics from the shift matrix."""
     T = 0.5 * np.abs(delta).sum(axis=1)              # T_y
@@ -179,6 +191,38 @@ def evaluate_intervention(
         "delta": delta,
         "metrics": {**metrics, **acc},
         "probs_abl": probs_abl,
+    }
+
+
+def individual_effect_metrics(
+    probs_abl: np.ndarray, probs_base: np.ndarray, labels: np.ndarray
+) -> dict:
+    """Cancel-free companions to the class-mean metrics.
+
+    U_y = mean over images of true class y of 0.5*||p_i^A - p_i^0||_1.
+    U_y >= T_y always (triangle inequality): a small T_y with a large U_y
+    means substantial individual effects whose directions cancel within the
+    class, which the class-mean shift cannot reveal. Also the prediction-flip
+    rate (argmax change), overall and per true class.
+    """
+    d = np.abs(probs_abl - probs_base).sum(axis=1) / 2.0  # per image, (n,)
+    flips = probs_abl.argmax(1) != probs_base.argmax(1)
+    U = np.zeros(N_CLASSES)
+    flip_y = np.zeros(N_CLASSES)
+    for y in range(N_CLASSES):
+        m = labels == y
+        if m.sum():
+            U[y] = d[m].mean()
+            flip_y[y] = flips[m].mean()
+    n = labels.shape[0]
+    return {
+        "U_max": float(U.max()),
+        "U_weighted": float((np.bincount(labels, minlength=N_CLASSES) / n * U).sum())
+        if n else float("nan"),
+        "y_U_star": int(np.argmax(U)),
+        "U_per_class": [float(v) for v in U],
+        "flip_rate": float(flips.mean()),
+        "flip_rate_per_class": [float(v) for v in flip_y],
     }
 
 

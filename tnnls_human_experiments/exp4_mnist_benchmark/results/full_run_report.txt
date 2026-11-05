@@ -1,0 +1,4 @@
+Run: mnist.3d97ba99ce.0
+Successful conditions: 5
+Failed conditions: 0
+stages: clusters,fits,ablations,shifts

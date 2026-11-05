@@ -1,0 +1,13 @@
+tag,n_vars,n_obs,n_hidden,seed,runtime_s,rss_peak_mb,py_peak_mb,converged,n_degenerate,total_tc_bits,top5_tc_bits,status,cluster,layer,cluster_size,input_condition
+small_L1_output_aware,510,290,10,344384169,300.12,0.0,,False,10,,,fit_timeout,18.0,1,290,output_aware
+median_L1_output_aware,510,445,10,1913513209,300.1,0.0,,False,10,,,fit_timeout,5.0,1,445,output_aware
+large_L1_output_aware,510,1113,10,140520161,300.12,0.0,,False,10,,,fit_timeout,13.0,1,1113,output_aware
+global_L1_output_aware,510,10000,10,145354651,300.12,0.0,,False,10,,,fit_timeout,,1,10000,output_aware
+small_L2_output_aware,410,290,10,935285338,240.42,0.0,0.0,True,0,39.51647412131804,"[10.567, 3.131, 3.053, 2.115, 1.907]",ok,18.0,2,290,output_aware
+median_L2_output_aware,410,445,10,978238871,140.84,0.0,0.0,True,0,53.04023556531581,"[10.316, 9.775, 6.477, 3.23, 1.879]",ok,5.0,2,445,output_aware
+large_L2_output_aware,410,1113,10,2919000237,300.12,0.0,,False,10,,,fit_timeout,13.0,2,1113,output_aware
+global_L2_output_aware,410,10000,10,4040939946,300.03,0.0,,False,10,,,fit_timeout,,2,10000,output_aware
+small_L3_output_aware,310,290,10,1949274813,177.94,0.0,0.0,True,0,60.187940798172114,"[11.556, 6.549, 3.958, 3.432, 3.202]",ok,18.0,3,290,output_aware
+median_L3_output_aware,310,445,10,1822104164,129.71,0.0,0.0,True,0,68.95239798813007,"[12.587, 10.395, 9.999, 3.876, 2.472]",ok,5.0,3,445,output_aware
+large_L3_output_aware,310,1113,10,1066982223,300.08,0.0,,False,10,,,fit_timeout,13.0,3,1113,output_aware
+global_L3_output_aware,310,10000,10,4085688891,300.06,0.0,,False,10,,,fit_timeout,,3,10000,output_aware
