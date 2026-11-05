@@ -100,6 +100,9 @@ into the change log below **before** any affected result is examined.
 - DeepDream parameters (steps, step size, regularization, jitter,
   preprocessing, starting images) are fixed and identical across the
   displayed factors; generated images are never used to rank or select.
+- 2026-11-05: superseded for this run — the selection rule is re-frozen in
+  the change log below (class-agnostic, two pre-designated clusters) and
+  DeepDream panels are deferred.
 
 ## F6. Readout language (from feedback item 4)
 
@@ -128,4 +131,5 @@ into the change log below **before** any affected result is examined.
 
 | Date | Change | Reason |
 |---|---|---|
-| (none yet) | | |
+| 2026-11-05 | **F5 superseded for this run** — case-study selection re-frozen as class-agnostic, two clusters pre-designated before any of their results were read. **Primary:** the cluster with the highest dominant-class purity among clusters with ≥ 60 combined (discovery + evaluation) images, tie-broken by purity, then combined size, then lower cluster id (resolves uniquely to **cluster-21**, great grey owl, 47/73 = 64.4%; runner-up cluster-69 at 57.8%). **Secondary:** the largest fully-pure cluster, tie-broken by lower cluster id (resolves to **cluster-85**, African grey parrot, 46/46 = 100%; a second fully-pure cluster, cluster-41, planetarium, 34/34, is excluded by the size tie-break). Case-study factor selection uses each cluster's dominant-class logit in place of the African-grey logit. Both panels are computed and **reported regardless of outcome**; neither may be promoted, demoted, or dropped after its results are read. Cluster-85 is flagged `low_sample` (evaluation cohort below the F2 30-image floor) and labelled illustrative. | The frozen ≥ 100-image African-grey rule yields a degenerate selection (cluster-81: 12/248 African greys, weak grey MI). The 25 + 25 per-class split makes a pure ≥ 60-image cluster impossible for *any* class, so the original pure-cluster property does not exist in this run. User decision, taken outcome-blind from label-space data only (assignment table + class-purity counts). |
+| 2026-11-05 | **DeepDream panels deferred** — no semantic-concentration imagery is generated in this run. Any semantic statement from top-shift tables remains qualitative, labelled as such per F5, or is omitted. | User decision 2026-11-05: DeepDream was an exploratory aid with substantial subjective judgment attached, not needed for the paper's claims; may be revisited later if judged necessary. |
