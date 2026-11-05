@@ -71,9 +71,9 @@ def figure_1():
 
     for x0, x1 in [(19.2, 20.7), (39.1, 40.6), (59.0, 60.5), (78.9, 80.4)]:
         arrow(x0, x1)
-    down = ("Readout: max per-output-class prob. change (effect size T_max),\n"
-            "input-class concentration H_input, localization contrast L$_j$,\n"
-            "each against size-matched random & univariate controls")
+    down = ("Readout: per-input-class TV shift of the class-mean prediction vector\n"
+            "(T$_{max}$ = max over input classes), input-class concentration\n"
+            "H$_{input}$, localization contrast L$_j$, vs. size-matched random & univariate controls")
     ax.annotate(down, xy=(89.8, 8), xytext=(47, -6),
                 ha="center", va="top", fontsize=7.2,
                 arrowprops=dict(arrowstyle="-|>", color="0.3", lw=1.0))
@@ -127,7 +127,8 @@ def figure_2():
     axes[0].set_title("a  ΔF1: data-driven (PHATE) − global\n(estimated partition, the practical method)")
     axes[1].imshow(np.nan_to_num(np.full((1, 1), np.nan)))
     heat(axes[1], "oracle")
-    axes[1].set_title("b  ΔF1: oracle − global\n(regions known; the upper bound)")
+    axes[1].set_title("b  ΔF1: true-region reference − global\n"
+                      "(regions known; the reference partition)")
     axes[1].set_yticklabels([])
 
     cax = fig.add_axes([0.335, 0.19, 0.012, 0.62])
@@ -194,22 +195,73 @@ def _e2_paired(path, gen):
             d = grp[comp] - grp["global"]
             se = d.std(ddof=1) / np.sqrt(len(d))
             rows.append(dict(gen=gen, n=n, alpha=alpha, noise=noise,
-                             est=est, comp=comp, d=d.mean(),
+                             est=est, comp=comp, d=d.mean(), se=se,
                              lo=d.mean() - 1.96 * se,
                              hi=d.mean() + 1.96 * se, pos=(d > 0).sum(),
                              nseed=len(d)))
     return pd.DataFrame(rows)
 
 
+def _e2_frozen():
+    """Reproduce the notebook's frozen PRIMARY convention exactly
+    (`analysis_core_grids.ipynb`, cell 15): per-(seed, alpha, noise,
+    region, true_group) best top-d match over ALL candidate factors;
+    averaged per condition within seed across all alpha x noise levels;
+    seed-level pairing with t(15) = 2.131. Bio rows are scored on the
+    primary input variant; linear rows are unfiltered (reference only)."""
+    cont = pd.read_csv(ROOT / "tnnls_human_experiments/AI_implemented/"
+                            "exp2_nonlinear/nonlinear_results/"
+                            "continuous_core/continuous_core_matches_combined.csv")
+    disc = pd.read_csv(ROOT / "tnnls_human_experiments/AI_implemented/"
+                            "exp2_nonlinear/nonlinear_results/"
+                            "discrete_core/discrete_core_matches_combined.csv")
+
+    def bestmatch(df, pm, est, corex_input, n):
+        s = df[(df.partition_method == pm) & (df.estimator == est)]
+        if corex_input is not None:
+            s = s[s.corex_input == corex_input]
+        s = s[s.n_per_region == n]
+        keys = ["root_seed", "alpha", "noise", "region", "true_group"]
+        best = s.groupby(keys).agg(topd_f1=("topd_f1", "max"),
+                                   cosine=("cosine", "max")).reset_index()
+        agg = (best.groupby(["root_seed", "alpha", "noise"])
+                   .agg(topd_f1=("topd_f1", "mean"),
+                        cosine=("cosine", "mean"))
+                   .groupby("root_seed").mean())
+        return agg
+
+    out = []
+    for gen, df, inp in (("sine_sum", cont, "binned_with_routing"),
+                         ("parity", disc, "with_routing")):
+        for n in (500, 5000):
+            o = bestmatch(df, "oracle", "bio", inp, n)
+            gl = bestmatch(df, "global", "bio", inp, n)
+            li = bestmatch(df, "oracle", "linear", None, n)
+            for metric in ("topd_f1", "cosine"):
+                d = (o[metric] - gl[metric]).dropna()
+                se = d.std(ddof=1) / np.sqrt(len(d))
+                t = 2.131
+                out.append(dict(gen=gen, n=n, metric=metric,
+                                oracle=o[metric].mean(),
+                                global_=gl[metric].mean(),
+                                linear_oracle=li[metric].mean(),
+                                d=d.mean(), lo=d.mean() - t * se,
+                                hi=d.mean() + t * se, se=se,
+                                nseed=len(d)))
+    return pd.DataFrame(out)
+
+
 def figure_3():
-    """E2: estimated partitions shown alongside oracle, per estimator;
-    the frozen primary-convention headline; the capability diagnostic."""
+    """E2: per-condition recalculation (both estimators); the frozen
+    PRIMARY-convention paired deltas, now computed rather than hard-coded
+    and labeled by estimator; the EM capability diagnostic."""
     cont = _e2_paired(ROOT / "tnnls_human_experiments/AI_implemented/"
                            "exp2_nonlinear/nonlinear_results/continuous_core/"
                            "continuous_core_matches_combined.csv", "sine_sum")
     disc = _e2_paired(ROOT / "tnnls_human_experiments/AI_implemented/"
                            "exp2_nonlinear/nonlinear_results/discrete_core/"
                            "discrete_core_matches_combined.csv", "parity")
+    frz = _e2_frozen()
 
     lp = pd.read_csv(ROOT / "tnnls_human_experiments/exp3_redundancy/"
                           "redundancy_results/parity_capability/"
@@ -225,53 +277,58 @@ def figure_3():
                                          ("parity", "parity")]):
         for ei, est in enumerate(["Linear", "Bio"]):
             ax = fig.add_subplot(gs_a[gi, ei])
-            sel = all_d = None
             src = cont if gen == "sine_sum" else disc
             sub = src[(src.n == 5000) & (src.noise == 0.05)
                       & (src.est == est.lower())]
             xs = np.arange(3)
             w = 0.38
+            t95 = 2.131  # 95% t CI, df = 15
             for ci, (comp, col, lbl) in enumerate(
-                    [("oracle", C["oracle"], "oracle − global"),
+                    [("oracle", C["oracle"], "true-region − global"),
                      ("phate", C["phate"], "PHATE − global")]):
                 s2 = sub[sub.comp == comp].sort_values("alpha")
                 xs_ = xs + (ci - 0.5) * w
-                err = [s2.d - s2.lo, s2.hi - s2.d]
-                ax.bar(xs_, s2.d, yerr=err, width=w, color=col,
+                se = s2.se
+                ax.bar(xs_, s2.d, yerr=t95 * se, width=w, color=col,
                        ec="0.2", lw=0.6, capsize=3,
                        label=lbl if (gi == 0 and ei == 0) else None)
                 for x_, (_, r) in zip(xs_, s2.iterrows()):
                     npos = f"{int(r.pos)}/{int(r.nseed)}"
-                    ax.text(x_, r.hi + (0.012 if r.d >= 0 else -0.028),
+                    ax.text(x_, (r.d + t95 * r.se if r.d >= 0
+                                 else r.d - t95 * r.se)
+                            + (0.010 if r.d >= 0 else -0.026),
                             npos, ha="center", fontsize=5.4, color="0.35")
             ax.axhline(0, color="0.45", lw=0.8)
             ax.set_xticks(xs)
             ax.set_xticklabels(["α=0", "α=0.5", "α=1"])
             ax.set_title(f"{genname}, {est}, n=5000", fontsize=8.5)
             if ei == 0:
-                ax.set_ylabel("paired ΔF1 vs global")
+                ax.set_ylabel("paired ΔF1 vs global\n(95% CI, t$_{15}$)")
 
-    # -- (b) frozen primary-convention headline
+    # -- (b) the frozen PRIMARY convention, now computed from the notebook's
+    # definition (Bio candidate pool; equal-condition weighting; t(15)).
     ax = fig.add_subplot(gs[0, 2])
-    metrics = ["F1", "cosine"]
-    oracle_v = [0.337, 0.383]
-    glob_v = [0.268, 0.319]
-    xs = np.arange(len(metrics))
-    w = 0.35
-    for x, o, g in zip(xs, oracle_v, glob_v):
-        ax.bar(x - w / 2, o, width=w, color=C["oracle"], ec="0.2", lw=0.6,
-               label="oracle partition" if x == 0 else None)
-        ax.bar(x + w / 2, g, width=w, color=C["gl"], ec="0.2", lw=0.6,
-               label="global" if x == 0 else None)
-    ax.set_xticks(xs)
-    ax.set_xticklabels(["top-d F1", "support cosine"])
-    ax.set_ylim(0, 0.55)
-    ax.annotate("$\\Delta$F1 +0.069\nCI [0.043, 0.094]\n(15/16 seeds)",
-                xy=(0.5, 0.40), xycoords="data", ha="center", fontsize=7.2,
-                bbox=dict(fc="#fdf3d8", ec="0.6", lw=0.5))
-    ax.set_ylabel("score")
-    ax.set_title("b  sine-sum, n = 5000\n(frozen primary convention)", fontsize=9)
-    ax.legend(fontsize=6.2, loc="center right")
+    sel = frz[(frz.n == 5000)].copy().reset_index(drop=True)
+    order = {"sine_sum": 0, "parity": 1}
+    sel["ord"] = sel.gen.map(order)
+    sel = sel.sort_values(["ord", "metric"], ascending=[True, False])
+    sel = sel.reset_index(drop=True)
+    ys = np.arange(len(sel))
+    ax.barh(ys - 0.18, sel.d, xerr=[sel.d - sel.lo, sel.hi - sel.d],
+            height=0.34, color="#1b9e77", ec="0.2", lw=0.6, capsize=2,
+            label="paired Δ (Bio, 95% CI, t$_{15}$)")
+    for y, (_, r) in zip(ys, sel.iterrows()):
+        lbl = (f"{r.gen}, n=5000, "
+               f"{'F1' if r.metric == 'topd_f1' else 'cosine'} : "
+               f"{r.oracle:.2f} vs {r.global_:.2f}")
+        ax.text(-0.128, y, lbl, ha="left", va="bottom", fontsize=6.4)
+    ax.axvline(0, color="0.45", lw=0.8)
+    ax.set_yticks([])
+    ax.set_xlim(-0.13, 0.30)
+    ax.set_xlabel("paired Δ: true-region − global (Bio)")
+    ax.set_title("b  frozen primary convention\n(computed; Bio; t$_{15}$)",
+                 fontsize=9)
+    ax.legend(fontsize=6.4, loc="center right")
 
     # -- (c) capability diagnostic
     ax = fig.add_subplot(gs[1, :])
@@ -281,7 +338,7 @@ def figure_3():
                                     (5000, "n = 5000")]):
         sb2 = lp[lp.n_samples == nsv].sort_values("d")
         base = np.array(grp_x[nsv])
-        ax.bar(np.arange(3) * 0 + (base - w / 2), sb2.seeded_init_tc_bits,
+        ax.bar(base - w / 2, sb2.seeded_init_tc_bits,
                yerr=sb2.seeded_init_se, width=w, color="#3b6fb6",
                ec="0.2", lw=0.6, capsize=2.5,
                label="atom-seeded init (uses ground truth)" if k == 0
@@ -305,8 +362,9 @@ def figure_3():
                         "d = 5"])
     ax.set_ylabel("fitted top-factor TC (bits)")
     ax.set_ylim(0, 0.76)
-    ax.set_title("c  parity capability diagnostic: the model family represents the"
-                 " structure; default-EM optimization collapses at n = 5000", fontsize=9)
+    ax.set_title("c  EM-fitted parity capability diagnostic: the model family represents"
+                 " the structure; default-EM optimization collapses at n = 5000",
+                 fontsize=9)
     ax.legend(fontsize=7, loc="upper center", ncol=2)
     ax.set_xlim(-0.7, 6.1)
 
@@ -314,7 +372,6 @@ def figure_3():
     plt.close(fig)
 
 
-# ---------------------------------------------------------------- figure 4
 def figure_4():
     c = pd.read_csv(ROOT / "tnnls_human_experiments/exp3_redundancy/"
                          "redundancy_results/core/core_info_summary.csv")
@@ -367,7 +424,8 @@ def figure_4():
     ax.set_ylabel("$\\Omega$ (bits, signed)")
     ax.legend(loc="lower left", fontsize=6.5)
     ax.set_title("b  $\\Omega$ instrument: population-level right where\n"
-                 "recovery works; fails loudly where it does not")
+                 "recovery works; support-recovery error propagates\n"
+                 "into the characterization (no failure warning)")
 
     fig.tight_layout()
     fig.savefig(OUT / "figure_4.png")
@@ -383,20 +441,24 @@ def figure_5():
     prev = pd.read_csv(ROOT / "tnnls_human_experiments/exp4_mnist_benchmark/"
                             "results/mnist_prevalence.csv")
 
-    fig, axes = plt.subplots(1, 3, figsize=(11.0, 3.1))
+    fig, axes = plt.subplots(1, 4, figsize=(13.5, 3.1))
     qs = sorted(rnd.threshold.unique())
     layers = [1, 2, 3]
     layer_names = {1: "H1", 2: "H2", 3: "H3"}
     lcolors = {1: "#1b9e77", 2: "#7570b3", 3: "#d95f02"}
 
-    for e, (df, metric, title, ylabel) in enumerate([
-            (rnd, "T_max", "a  local CorEx vs matched random\n(everywhere favorable)",
-             "paired $\\Delta$T$_{max}$ (LC $-$ random)"),
-            (prev, "prevalence", "b  class-concentrated effects by layer\n"
-             "(T$_{max}\\geq$0.10, H$_{input}\\leq$0.50)",
-             "conjunctive prevalence"),
-            (uni, "T_max", "c  local CorEx vs univariate control\n(H3-scoped)",
-             "paired $\\Delta$T$_{max}$ (LC $-$ univariate)")]):
+    spec = [
+        (rnd, "T_max", "a  local CorEx vs matched random\n(aggregate: everywhere favorable)",
+         "paired $\\Delta$T$_{max}$ (LC $-$ random)"),
+        (prev, "prevalence", "b  class-concentrated effects by layer\n"
+         "(T$_{max}\\geq$0.10, H$_{input}\\leq$0.50)",
+         "conjunctive prevalence"),
+        (uni, "T_max", "c  local CorEx vs univariate control\n(H3-scoped)",
+         "paired $\\Delta$T$_{max}$ (LC $-$ univariate)"),
+        (rnd, "flip_rate", "d  per-image complement\n(prediction-flip rate, LC $-$ random)",
+         "paired $\\Delta$flip rate (LC $-$ random)"),
+    ]
+    for e, (df, metric, title, ylabel) in enumerate(spec):
         ax = axes[e]
         for l in layers:
             if df is prev:
@@ -475,7 +537,7 @@ def figure_6():
         ax.text(x, v + 0.01, f"{v:.2f}", ha="center", fontsize=6.6)
     ax.set_xticks(xs)
     ax.set_xticklabels([layer_names[l] for l in layers], fontsize=7)
-    ax.set_ylabel("T$_{max}$ (bits of class-mean shift)")
+    ax.set_ylabel("T$_{max}$ (class-mean prediction TV,\nmax over input classes)")
     ax.set_title("a  effect magnitude, q = 0.9", fontsize=9)
     ax.legend(fontsize=6.4)
     ax.set_ylim(0, 0.9)
@@ -560,13 +622,13 @@ def figure_7():
     (Chapter 2). Panels reproduced as raster extracts."""
     names = [
         (ASSETS / "diss_fig2_12a.png",
-         "a  MNIST cluster-16, H1: decoder reconstruction after\nMI-prop.-to-factor perturbation (top: factor 1,\nbottom: factor 2); right: per-logit MI"),
+         "a  EARLIER 200-unit model: MNIST cluster-16, H1: decoder\nreconstruction after MI-weighted perturbation (top: factor 1,\nbottom: factor 2); right: per-logit MI"),
         (ASSETS / "diss_fig2_13.png",
-         "b  MNIST: accuracy change across the 20 discovery\nclusters after deleting the factor's top nodes\n(top: H1 factor 1 (50) & factor 2 (50); bottom: H2)"),
+         "b  EARLIER model: accuracy change across clusters after\ndeleting the factor's top nodes\n(rows = factors 1, 2; columns = layers H1 (left), H2 (right))"),
         (ASSETS / "diss_fig2_17.png",
-         "c  ResNet-18/ImageNet: feature-weighted DeepDream on\nAfrican-grey cluster-58 factors 1 & 5\n(feather-like textures)"),
+         "c  ResNet-18/ImageNet (earlier analysis): feature-weighted\nDeepDream on African-grey cluster-58 factors 1 & 5\n(feather-like textures)"),
         (ASSETS / "diss_fig2_20_top.png",
-         "d  ResNet-18: class shifts after deleting factor 1's\ntop 100 units: African grey −0.91; freed mass\nreturns diffusely (largest gain +0.01/class)"),
+         "d  ResNet-18 (earlier analysis): LOGIT shifts after deleting\nfactor 1's top 100 units: African grey $-$0.91; other shown\nlogits move $\\leq$ +0.01 (logit scale, not probability mass)"),
     ]
     fig, axes = plt.subplots(2, 2, figsize=(12.6, 9.2))
     for ax, (path, cap) in zip(axes.flat, names):

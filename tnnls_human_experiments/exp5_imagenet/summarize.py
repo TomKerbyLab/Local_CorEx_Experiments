@@ -167,9 +167,17 @@ def cluster_bootstrap_ci(per_cluster: pd.Series, b: int = BOOTSTRAP_B,
 def paired_lc_vs_control(abl: pd.DataFrame, control: str, systematic: set) -> list[dict]:
     """Paired LC - control at the cluster level (freeze F4): per-factor diff,
     averaged within cluster, bootstrap CI over clusters. The pairing uses the
-    identical evaluation observations (same cohort) for every member."""
+    identical evaluation observations (same cohort) for every member.
+
+    2026-11-05 fix (external-review round 2): control rows are now matched
+    to the LC rows at the primary threshold (PRIMARY_Q) instead of being
+    averaged over all thresholds present for the (cluster, factor) cell.
+    Effect on the committed 282-pair systematic tables: differences at the
+    fourth decimal (largest |Δmean| 3e-4 on top5_set_change_rate); no
+    conclusion changes (paper/figures/check_e5_pairing_fix.py)."""
     lc = lc_rows(abl, systematic)
     ctl = abl[abl["method"] == control]
+    ctl = ctl[ctl["threshold"] == PRIMARY_Q]
     out_rows = []
     for stat_col in ("tv_source", "localization_contrast",
                      "mean_dp_dominant_class", "top5_set_change_rate",

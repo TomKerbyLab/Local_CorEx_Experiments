@@ -81,6 +81,15 @@ All numbers from the executed run (`outputs/summaries/imagenet_*` on
    magnitude for localization; the paper's value-of-selection claim uses
    the localized/useful framing, never "univariate hurts less" or "LC
    damages most".
+   **[2026-11-05 dated correction].** The data define the pairs as
+   diff = LC − control: with ΔL_j = −0.017 (CI [−0.026, −0.009]), the
+   univariate control's localization contrast is slightly *higher* (more
+   localized) than LC's, and its raw TV is larger — the opposite of this
+   paragraph's original wording. The corrected reading ("the prediction-
+   guided single-unit selector matches or exceeds LC on both aggregates")
+   is adopted in `paper/manuscript.md` §7; this section's wording should
+   be regenerated against the store when the two-panel CSVs are next
+   written.
 3. **Dominant-class concordance is modest:** the factor's dominant class
    appears among the five most-decreased outputs for the most-affected true
    class in 0.308 of cells (CI [0.250, 0.366]). Factor identity (by MI) and
@@ -110,7 +119,15 @@ subjective, exploratory, not needed for the claims). The panels:
   (all other per-class shifts ≤ 1e-6, with mass returning diffusely
   across classes); top-1 accuracy on the cohort falls 0.27–0.42. The
   localization contrast is 0.58 / 0.56 against randoms' ≈ −0.40 and the
-  univariate control matches the owl collapse (−0.85 / −0.70). Two
+  univariate control matches the owl collapse (−0.85 / −0.70).
+  **[2026-11-05 flag — recording left as written.]** The "≤ 1e-6" clause
+  conflicts with exact conservation of the class-mean probability vector
+  (a −0.86 drop requires ≈ +8.6e-4 per mean elsewhere); either the
+  quantifier refers to a different aggregation than the class-mean shift
+  Δ_{y,c}, or it is a record error. It must be reconciled against the
+  `case_two_top_shifts` store before submission; the manuscript states
+  only "the owl class dominates; conservation places the freed mass
+  across the remaining classes". Two
   dissociations worth a sentence in prose: the factors' own MI-dominant
   logits (206, 171) are *not* the owl class; and the per-class
   most-affected label lands on a second bird class present in the cohort
