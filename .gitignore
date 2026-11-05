@@ -239,9 +239,7 @@ outputs/**
 !outputs/logs/imagenet_run_id.json
 !outputs/configs/*.json
 outputs/raw/imagenet/*
-!outputs/raw/imagenet/*cache_verification.parquet
-!outputs/raw/imagenet/*split.parquet
-!outputs/raw/imagenet/*split_integrity.parquet
+!outputs/raw/imagenet/*.parquet
 !outputs/raw/imagenet/*.cache_meta.json
 !outputs/raw/imagenet/verify_report.json
 !outputs/raw/imagenet/eval_cohorts.npz
