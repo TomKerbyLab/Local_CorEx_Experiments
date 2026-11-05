@@ -86,16 +86,28 @@ shards; seed-level aggregation of the headline deltas.
 ## A.5 Bio CorEx feasibility verdict (fb#2 follow-up)
 
 Pilot (`bio_pilot_e4.py`, branch `exp4-global-arm`; discovery-only,
-subprocess-isolated, 5-min per-fit cap; frozen before outcomes):
-**Dense-mode Bio CorEx does not converge within 5 minutes on any local
-cluster fit** (290/445/1113 obs × ~510 vars, M=10 — all recorded as
-`fit_timeout` rows), and a direct probe gives ≈18.5 s/iteration at n=500
-⇒ ≈31 min per fit at the frozen max_iter=100, scaling further for the
-10k global fit. The reviewer's crossed global/local Bio design would cost
-hundreds of GPU-hours — outside its own feasibility rule — so **the Bio
-expansion is declined for this paper**. Estimator generality remains
-evidenced by the synthetic grids: E1's bio_check grid (oracle 0.992 /
-data-driven 0.988 vs global 0.659 under Bio — the localization gain
-reproduces under the alternate estimator) and E2's full Bio-vs-Linear
-grids. A bounded revisit (subsampled ~100-unit activations) belongs to
-the companion direction, not this paper.
+subprocess-isolated, 5-min per-fit cap; frozen before outcomes; full row
+table `results/bio_pilot_e4.csv`): feasibility is **size-dependent, in
+exactly the way the linear-vs-Bio comparison can state honestly** —
+
+- Converged within the cap: H2 (≈410 vars) and H3 (≈310 vars) fits at the
+  two smaller discovery clusters (n=290: 240 s/178 s; n=445: 141 s/130 s),
+  with healthy recovered structure (top-5 factor TC 39–69 bits, zero
+  degenerate factors).
+- Timed out: **every** H1 fit (≈510 vars), the larger cluster (n=1113) at
+  all layers, and **all four global fits** (n=10,000).
+
+⇒ A **local-only** Bio sensitivity at H2/H3 on the smaller clusters would
+run (single seed; ~2–4 min/fit), but the reviewer's crossed global/local
+design is **infeasible on its global side** (10k-sample Dense-mode Bio),
+and a two-cluster × two-layer × one-seed Bio comparison is too thin to
+carry the estimator-generality claim it would be added for. **Verdict:
+the Bio expansion is declined for this paper**, with the size-dependence
+itself recorded as a fact (Bio's Dense-mode cost scales with sampled
+observations × variables, and the linear pipeline's advantage is not
+merely statistical). Estimator generality remains evidenced by the
+synthetic grids: E1's bio_check grid (oracle 0.992 / data-driven 0.988 vs
+global 0.659 under Bio — the localization gain reproduces under the
+alternate estimator) and E2's full Bio-vs-Linear grids. A bounded revisit
+(subsampled ~100-unit activations) belongs to the companion direction,
+not this paper.
