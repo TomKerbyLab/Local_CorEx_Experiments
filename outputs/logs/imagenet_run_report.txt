@@ -13,3 +13,19 @@ Successful conditions: 1
 Failed conditions: 0
 stages: clusters
 stage_results: {"run_id": "imagenet.7caecff243.0", "clusters": {"n_discovery": 25000, "n_evaluation": 25000, "phate_runtime_s": NaN, "kmeans_runtime_s": NaN, "assignment_method": "nearest_discovery_neighbor_std512", "low_sample_clusters": [21, 22, 30, 39, 41, "..."]}}
+Run: imagenet.7caecff243.0
+Successful conditions: 1
+Failed conditions: 0
+stages: fits
+stage_results: {"run_id": "imagenet.7caecff243.0", "fits": {"runtime_s": 132.7749445438385, "n_clusters": 100}}
+Run: imagenet.7caecff243.0
+Successful conditions: 0
+Failed conditions: 0
+stage: cluster_size_distribution (F2, written before any systematic table)
+distribution: {"discovery": {"n_clusters": 100, "min": 17, "max": 1669, "mean": 250.0, "deciles": {"p0": 17, "p10": 43, "p20": 74, "p30": 88, "p40": 134, "p50": 161, "p60": 228, "p70": 272, "p80": 354, "p90": 494, "p100": 1669}, "n_below_50": null}, "evaluation": {"n_clusters": 100, "min": 14, "max": 1756, "mean": 250.0, "deciles": {"p0": 14, "p10": 39, "p20": 70, "p30": 84, "p40": 118, "p50": 172, "p60": 231, "p70": 283, "p80": 353, "p90": 543, "p100": 1756}, "n_below_50": 14}}
+Run: imagenet.7caecff243.0
+Successful conditions: 0
+Failed conditions: 0
+stage: low_sample_clusters (<50 evaluation images)
+n_low_sample: 14
+clusters: [21, 22, 30, 39, 41, 53, 59, 69, 78, 83, 85, 87, 90, 95]
