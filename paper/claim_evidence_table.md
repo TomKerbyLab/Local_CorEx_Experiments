@@ -95,19 +95,26 @@ before it enters prose.
 | **Global CorEx supports** | ✅ **RUN** (branch `exp4-global-arm`, 5 seeds × {M=10 per-fit-parity, M=100 budget-matched} × 3 layers × both input conditions; paired vs 20 size-matched randoms; per-cluster TV recorded). First reading: global-selected groups substantially exceed their size-matched randoms in effect size and class concentration nearly everywhere (e.g. output-aware L2 M=10 q=0.9: ΔT_max +0.762, CI [0.675, 0.849]), but the *H3* contrast vs randoms is small (+0.03 vs the local arm's H3-specificity finding) — localization's payoff concentrates exactly where the E4 account said it does. Cross-arm (global vs local) size-matched comparison is the E4-doc addendum's remaining step |
 | Simple alternative grouping | not run (priority below global-CorEx, above Bio per feedback) |
 
-### R2.3 E5 (ImageNet validation)
+### R2.3 E5 (ImageNet validation) — RUN (branch `exp5-port`, commit 3b1313c)
 
-No committed results. All rows fill in after the frozen-protocol run (plan
-§5). Until then, the paper's wording must not assert that E5 shows
-"localized and semantically concentrated" effects — those are the pending
-questions. Known in advance and governing the readout: pooled-feature
-deletion is exact arithmetic (Δz = −W:,S h_S), evidencing which feature
-groups contribute to which predictions, not downstream synergy.
+| Item | Value |
+|---|---|
+| Implementation check | cache verified against 2,000 stratified decoded re-forwards (max logit absdiff **3.6e-5** ≤ the frozen 1e-4); 26/26 tests; 0 fit failures; zero ablation cells failed |
+| Local CorEx vs matched random (282 pairs in 94 clusters; cluster-bootstrap CI) | paired Δ tv_source **+0.214** (CI [0.192, 0.238]); localization contrast **L_j +0.263** (CI [0.232, 0.296]); L_j distribution: LC median **0.263** (97.5% of factors > 0) vs random 0.0048 (52%) — effects concentrate near the factor's discovery region |
+| Local CorEx vs univariate | univariate supports give **larger** raw TV (Δ −0.019, CI [−0.028, −0.012]) and less localized shifts (ΔL_j −0.017) — LC trades raw magnitude for localization; the paper's value-of-selection argument must use the review's framing (useful/structural/lcalized selection, not greatest damage) |
+| Dominant-class concordance | c*_j among the five most-decreased classes for the most-affected true class: **0.308** (CI [0.250, 0.366]) — modest |
+| TC ↔ magnitude | Spearman 0.29–0.37 (factor TC, unit-MI total) — modest, echoing E4's finding 6 |
+| Sample-size discipline | per-cluster size distribution written **before** systematic tables (discovery median 161, min 17, max 1669; 14 clusters < 50 eval images flagged low_sample; 17 factor rows excluded < 30 source obs per the freeze) |
+| Case study | ⚠ **degenerate outcome**: under the frozen ≥100-discovery-image rule no cluster concentrates African-grey images (selected cluster 81: proportion 0.008, grey-logit MI 0.003–0.006 nats); the pure-grey cluster 85 (22/22 images) is excluded **only** by the ≥100 rule. Options: (a) report cluster-81 per freeze (weak factors); (b) log a freeze change to lower the size threshold and use cluster 85 (change is outcome-blind — driven by discovery-side composition — and must be logged before reading its results); (c) drop the dedicated case-study panel | 
+| Readout rules | pooled-feature deletion is exact arithmetic (Δz = −W:,S h_S): conclusions are about which statistically-selected feature groups contribute to which predictions; no synergy/mechanism language; semantic-concentration statements remain qualitative unless a stated assessment is added |
+| Source | branch `exp5-port`: outputs/summaries/imagenet_* (split, clusters, factors 300 rows, supports 46.9k rows, ablation_summary 2,100 cells, systematic LC-vs-random/univariate, localization_contrasts, coverage, case_study) |
 
 ## MISSING / unresolved (blocks specific table cells, not the drafting of E1–E4)
 
 1. ~~**E1/E2 global-capacity control grids unrun**~~ — **E1 grid RUN** (results above; commit pending to the Gaussian branch); **E2 capacity grid still pending** if the nonlinear capacity objection is to be answered with data rather than the E1 analogue.
 2. ~~**E2 verdict convention**~~ — **RESOLVED**: primary = per-true-group best match (frozen; criterion at n=5000 → REJECTED with significant F1 gain, cosine 0.383); pooled convention kept as the labeled sensitivity. See R1.2.
-3. **E4 global CorEx arm** — not run; scheduled.
+3. ~~**E4 global CorEx arm**~~ — **RUN** (branch `exp4-global-arm` @ 5edf2f5; addendum `paper/exp4_addendum_global_arm.md`). Remaining for prose: the cross-arm size-matched global-vs-local table and seed-level aggregation of headline deltas.
 4. E3 per-cell CI tables — prose ranges + committed CSVs suffice for the table; formal per-cell table needs one pass over `core_info_summary.csv` if wanted.
-5. E5 — all rows pending its frozen-protocol run.
+5. ~~E5~~ — **RUN** (branch `exp5-port` @ 3b1313c; rows above). Remaining decisions: the case-study provenance option (a)/(b)/(c); DeepDream panels (excluded from the port; needed only for the case-study figure).
+6. Bio expansion — **DECLINED** with pilot evidence (addendum §A.5); alternative-grouping baseline (ladder rung 4) remains unrun, priority per feedback only if the global arm's H3 reading needs a further comparator.
+7. Case-study freeze change (if option (b)): must be logged in the exp5 protocol-freeze change log *before* reading cluster-85's held-out results.
