@@ -44,7 +44,16 @@ Two claims, each carried by named experiments and by nothing else:
 - **Experiment 1 — Gaussian grouped-covariance recovery.** Grids run and
   analyzed; results committed.
 - **Experiment 2 — Nonlinear recovery** (sine-sum primary, parity stress
-  case, two capability/optimization diagnostics).
+  case, two capability/optimization diagnostics). Convention frozen
+  (2026-11-04): primary reading = per-true-group best top-d match per
+  condition; sine-sum oracle−global F1 +0.069 (CI [0.043, 0.094],
+  15/16 seeds) at n=5000 with support cosine 0.383 — **gains real but
+  modest, and the strict cosine condition of the original verdict rule
+  fails**; the parity case shows a large localization gain
+  (ΔF1 +0.161, 16/16 seeds) with mislocalized supports and Linear CorEx
+  outright failing — the honest composite is "localization helps group
+  recovery under nonlinearity; support-level precision lags". The pooled
+  all-rows convention is kept as a labeled sensitivity reading.
 - **Global-capacity controls** (localization does not win by hidden factor
   budget alone): presented in the main argument, not the appendix,
   **[fb #6]**.

@@ -33,10 +33,9 @@ before it enters prose.
 
 | Item | Value |
 |---|---|
-| Primary (committed notebook convention: mean over **all** match rows, both regions, pooled n) | oracle cosine **0.363** / top-d F1 **0.295** vs global 0.321 / 0.264 vs Linear-oracle 0.329 / 0.253; notebook's own criterion (oracle F1 > max(global, linear-oracle) **and** cosine > 0.5) → **H1 MIXED/REJECTED** |
-| Paired uncertainty **[recomputed]** (notebook convention, seed-level) | n=5000: cosine Δ **+0.064** CI [0.043, 0.085] (16/16 seeds); F1 Δ **+0.069** CI [0.043, 0.094] (15/16); n=500: cosine Δ +0.019 CI [0.008, 0.030]; F1 Δ −0.006 CI [−0.019, 0.007] (crosses 0) |
-| Sensitivity: per-condition best-match convention **[recomputed]** | n=5000: F1 **0.617 vs 0.443** (Δ CI [0.132, 0.215]); cosine **0.668 vs 0.493** (Δ CI [0.146, 0.202]) — this convention would flip the verdict to SUPPORTED (cosine above the 0.5 bar) |
-| **⚠ Convention decision required** | The commit-of-record verdict (MIXED) and the per-condition reading (SUPPORTED) disagree in **verdict class**, not just size. The match rows are per (learned factor × true group); pooling all factors dilutes by over-parametrization, while best-match-per-condition answers "does the fit find the group?" Resolve before drafting §E2/§4 prose — recommended: report both, make the per-condition reading primary (it is the recovery question of Claim 1), and freeze by re-running the notebook's verdict cells with the chosen convention |
+| Primary convention — **RESOLVED [recomputed, frozen]** (per-(true-group, condition) best top-d match; criterion at n=5000; notebook re-executed on branch `worktree-e2-conventions`) | sine-sum n=5000: oracle F1 **0.337** vs global **0.268** vs linear-oracle 0.256 — ΔF1 **+0.069** CI [0.043, 0.094]; cosine oracle **0.383** vs global 0.319 — Δ **+0.064** CI [0.043, 0.085]; n=500: cosine Δ +0.019 CI [0.008, 0.030], F1 Δ −0.006 ns. Note: a best-match taken jointly over groups ∪ factors (an earlier audit draft, 0.617/0.668) is selection-inflated and **not adopted** |
+| Verdict | **F1 gains real and significant at n=5000 (15/16 seeds); cosine below the 0.5 bar (0.383) → localization improves recovery but support-level precision stays moderate; the criterion's strict cosine condition fails** |
+| Sensitivity: committed pooled convention | oracle cosine 0.363 / F1 0.295 vs global 0.321 / 0.264; notebook's own criterion → MIXED/REJECTED (superseded in prominence by the primary convention above) |
 | Additional qualifications | TC is not a recovery proxy (random partitions explain **more** TC than oracle: 2.287 vs 1.439 per fit); nuisance false-positive fraction ≈ 0.4–0.55 across schemes; pilot numbers superseded by core-grid numbers |
 | Source | `tnnls_human_experiments/AI_implemented/exp2_nonlinear/analysis_core_grids.ipynb` (cells 2–6), combined CSVs under `nonlinear_results/{continuous_core,discrete_core}/` |
 
@@ -108,7 +107,7 @@ groups contribute to which predictions, not downstream synergy.
 ## MISSING / unresolved (blocks specific table cells, not the drafting of E1–E4)
 
 1. ~~**E1/E2 global-capacity control grids unrun**~~ — **E1 grid RUN** (results above; commit pending to the Gaussian branch); **E2 capacity grid still pending** if the nonlinear capacity objection is to be answered with data rather than the E1 analogue.
-2. **E2 verdict convention** — pooled vs per-condition best-match flips the sine-sum H1 verdict class; resolve and freeze before §4 prose (both readings carried above in the interim).
+2. ~~**E2 verdict convention**~~ — **RESOLVED**: primary = per-true-group best match (frozen; criterion at n=5000 → REJECTED with significant F1 gain, cosine 0.383); pooled convention kept as the labeled sensitivity. See R1.2.
 3. **E4 global CorEx arm** — not run; scheduled.
 4. E3 per-cell CI tables — prose ranges + committed CSVs suffice for the table; formal per-cell table needs one pass over `core_info_summary.csv` if wanted.
 5. E5 — all rows pending its frozen-protocol run.
