@@ -1,0 +1,39 @@
+{
+  "config": {
+    "functional_q": 0.8,
+    "layers": [
+      1,
+      2,
+      3
+    ],
+    "n_clusters": 20,
+    "n_factors": 10,
+    "n_random_functional": 5,
+    "n_retained_functional": 3,
+    "n_retained_supports": 5,
+    "support_thresholds": [
+      0.6,
+      0.7,
+      0.8,
+      0.9
+    ]
+  },
+  "run_id": "dropout.1eb89cfb10.0",
+  "seeds": [
+    6100,
+    6101,
+    6102,
+    6103,
+    6104,
+    6105,
+    6106,
+    6107,
+    6108,
+    6109
+  ],
+  "stages": [
+    "train",
+    "reps",
+    "functional"
+  ]
+}
