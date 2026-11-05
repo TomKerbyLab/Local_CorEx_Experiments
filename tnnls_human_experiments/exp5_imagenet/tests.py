@@ -78,8 +78,9 @@ def test_cached_logits_equal_wh_plus_b():
         feats = z["features"]
         logits = z["logits"]
     recon = feats @ W.T + b
-    # float32 (cache) vs float64 (reconstruction): tolerance ~ float32 eps
-    assert np.abs(recon - logits).max() <= 0.5
+    # float32 (cache) vs float64 (reconstruction): measured max absdiff on the
+    # full 50k cache is 1.1e-5 (float32 rounding); 1e-3 leaves 100x headroom
+    assert np.abs(recon - logits).max() <= 1e-3
 
 
 # ---------------------------------------------------------------------------

@@ -229,8 +229,9 @@ def secondary_cluster_report(store: ResultStore, cache_path: Path) -> list[dict]
         is_source = z[f"cluster_{cluster:03d}_source"].astype(bool)
     for f in factors:
         fi = f["factor_index"]
+        q_main = int(round(0.80 * 100))
         with np.load(config.RAW_DIR / "imagenet" / "classwise_shifts" /
-                     f"cluster_{cluster:03d}_factor_{fi:02d}_q0080.npz") as z:
+                     f"cluster_{cluster:03d}_factor_{fi:02d}_q{q_main}.npz") as z:
             tv = z["local_corex_0_tv"]
         off = ~is_source
         off_imgs = eval_imgs[off]

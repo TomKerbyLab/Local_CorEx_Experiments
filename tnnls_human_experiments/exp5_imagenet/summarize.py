@@ -122,16 +122,24 @@ def systematic_factor_set(abl: pd.DataFrame) -> set:
     whose cohort has >= MIN_EVAL_OBS_FOR_SYSTEMATIC source observations."""
     lc = abl[(abl["method"] == "local_corex")
              & (abl["threshold"] == PRIMARY_Q)
-             & (abl["fit_failed"] != True)  # noqa: E712
+             & (_fit_failed_mask(abl))
              & abl["tv_source"].notna()
              & (abl["n_source"] >= MIN_EVAL_OBS_FOR_SYSTEMATIC)]
     return set(zip(lc["cluster"].astype(int), lc["factor_index"].astype(int)))
 
 
+def _fit_failed_mask(abl: pd.DataFrame) -> pd.Series:
+    """True where the cell's CorEx fit failed. Rows of the normal path carry
+    no fit_failed field; a missing column means no failure."""
+    if "fit_failed" in abl.columns:
+        return ~abl["fit_failed"].fillna(False).astype(bool)
+    return pd.Series(True, index=abl.index)
+
+
 def lc_rows(abl: pd.DataFrame, systematic: set) -> pd.DataFrame:
     lc = abl[(abl["method"] == "local_corex")
              & (abl["threshold"] == PRIMARY_Q)
-             & (abl["fit_failed"] != True)  # noqa: E712
+             & (_fit_failed_mask(abl))
              & abl["tv_source"].notna()].copy()
     mask = [(int(c), int(fi)) in systematic
             for c, fi in zip(lc["cluster"], lc["factor_index"])]

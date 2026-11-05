@@ -74,7 +74,7 @@ def fit_one_cluster(k: int, cfg: dict, cache_path: Path) -> dict:
     mis_raw = fit.mis  # nats
     mis = fit.association_scores()  # nonneg clip (documented transform)
     n_h = H.shape[1]
-    order = np.argsort(-fit.tcs)[: cfg["n_retained"]]
+    order = np.argsort(-fit.tcs)[: cfg.get("n_retained", N_RETAINED)]
 
     factor_rows, support_rows = [], []
     for rank, j in enumerate(order):
@@ -137,7 +137,11 @@ def run_fits(store: ResultStore, cfg: dict, cache_path: Path,
 
 def _fit_condition(cond: dict) -> dict:
     """Worker entry: one condition = one cluster fit."""
-    cfg = {"n_factors": N_FACTORS, "primary_q": PRIMARY_Q}
+    from clustering import KMEANS_SEED, N_CLUSTERS, PHATE_SEED
+
+    cfg = {"n_factors": N_FACTORS, "primary_q": PRIMARY_Q,
+           "n_clusters": N_CLUSTERS, "phate_seed": PHATE_SEED,
+           "kmeans_seed": KMEANS_SEED}
     cache_path = _default_cache_path()
     return fit_one_cluster(cond["cluster"], cfg, cache_path)
 

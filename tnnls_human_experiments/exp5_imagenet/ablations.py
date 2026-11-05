@@ -65,6 +65,9 @@ def build_final_layer_cache() -> Path:
 
 
 def load_final_layer() -> tuple[np.ndarray, np.ndarray]:
+    path = load_final_layer_path()
+    if not path.exists():
+        build_final_layer_cache()
     d = torch.load(load_final_layer_path(), map_location="cpu")
     return (d["W"].numpy().astype(np.float64),
             d["b"].numpy().astype(np.float64))
