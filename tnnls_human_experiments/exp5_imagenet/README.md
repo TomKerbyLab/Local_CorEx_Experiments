@@ -27,6 +27,15 @@ Human-pipeline port of `tnnls_experiments/exp5_imagenet` (program spec
   (pure `african_grey_rule`), two factors with largest MI with the
   African-grey logit, supports at q in {0.6, 0.7, 0.9} (0.8 from the main
   stage), matched controls, secondary-cluster report.
+- `case_study_two.py` — the 2026-11-05 re-frozen class-agnostic case study
+  (freeze change log on worktree-e2-conventions, committed BEFORE any of
+  its results were read): primary cluster-21 (highest dominant-class
+  purity among >= 60 combined images, great grey owl) and secondary
+  cluster-85 (largest fully-pure cluster, African grey, flagged
+  low_sample), both reported regardless of outcome; cells run under the
+  dedicated shard family `case_two_ablation_summary` / `case_two_top_shifts`
+  (stage `case_two_ablation`) so they never enter the main-stage tables.
+  Summaries: `outputs/summaries/imagenet_case_study_two*.csv`.
 - `summarize.py` — tidy CSVs in `outputs/summaries`, cluster-level bootstrap
   (F4), coverage table (F2), F3 control-relative localization tables.
 - `tests.py` — the spec's 10 validation tests plus extra guards.

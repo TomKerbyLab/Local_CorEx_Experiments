@@ -156,14 +156,21 @@ class CellArrays:
 def run_ablation_cell(cond: dict) -> dict:
     """One (cluster, factor) cell: Local CorEx support, matched random
     supports, and the univariate support; each evaluated on the cluster's
-    cohort. Writes parquet shards + a compressed npz."""
+    cohort. Writes parquet shards + a compressed npz.
+
+    cond["cell_stage"] (default "ablation") and cond["kinds"] (default
+    ("ablation_summary", "top_shifts")) let secondary analyses (e.g. the
+    two-cluster case study) write to their own shard family so they never
+    enter the main-stage tables via read_all(kind)."""
     store = ResultStore("imagenet")
     cluster = int(cond["cluster"])
     factor_index = int(cond["factor_index"])
     threshold = float(cond.get("threshold", 0.80))
-    cond_full = {"stage": "ablation", "cluster": cluster,
+    cell_stage = cond.get("cell_stage", "ablation")
+    kinds = tuple(cond.get("kinds") or ("ablation_summary", "top_shifts"))
+    cond_full = {"stage": cell_stage, "cluster": cluster,
                  "factor_index": factor_index, "threshold": threshold}
-    if store.is_done(cond_full, ("ablation_summary", "top_shifts")):
+    if store.is_done(cond_full, kinds):
         return {"cluster": cluster, "factor_index": factor_index, "cached": True}
 
     cache_path = Path(cond["cache_path"])
@@ -182,12 +189,12 @@ def run_ablation_cell(cond: dict) -> dict:
     frow = factors[(factors["cluster"] == cluster)
                    & (factors["factor_index"] == factor_index)].iloc[0]
     if frow.get("fit_failed", False) == True:  # noqa: E712
-        store.write(cond_full, "ablation_summary",
+        store.write(cond_full, kinds[0],
                     [{"cluster": cluster, "factor_index": factor_index,
                       "method": "local_corex", "fit_failed": True,
                       "failure_reason": str(frow.get(
                           "failure_reason", "corex_fit_failed"))}])
-        store.write(cond_full, "top_shifts", [])
+        store.write(cond_full, kinds[1], [])
         return {"cluster": cluster, "factor_index": factor_index,
                 "status": "fit_failed"}
 
@@ -204,11 +211,11 @@ def run_ablation_cell(cond: dict) -> dict:
     if sup_rows is not None and len(sup_rows) == 0:
         # threshold outside of the stored primary support (case-study only
         # cell) should not happen here; record as failure-as-data row
-        store.write(cond_full, "ablation_summary",
+        store.write(cond_full, kinds[0],
                     [{"cluster": cluster, "factor_index": factor_index,
                       "method": "local_corex", "fit_failed": False,
                       "no_support_at_threshold": True, "threshold": threshold}])
-        store.write(cond_full, "top_shifts", [])
+        store.write(cond_full, kinds[1], [])
         return {"cluster": cluster, "factor_index": factor_index,
                 "status": "no_support", "threshold": threshold}
     elif sup_rows is not None:
@@ -254,8 +261,8 @@ def run_ablation_cell(cond: dict) -> dict:
     np.savez_compressed(
         shift_dir / f"cluster_{cluster:03d}_factor_{factor_index:02d}"
         f"_q{int(round(threshold * 100)):02d}.npz", **payload)
-    store.write_multiple(cond_full, {"ablation_summary": summary_rows,
-                                     "top_shifts": shift_rows})
+    store.write_multiple(cond_full, {kinds[0]: summary_rows,
+                                     kinds[1]: shift_rows})
     return {"cluster": cluster, "factor_index": factor_index,
             "status": "ok", "n_rows": len(summary_rows)}
 
