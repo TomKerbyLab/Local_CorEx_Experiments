@@ -16,6 +16,7 @@ support and all of its controls (spec + freeze F3).
 
 from __future__ import annotations
 
+import json
 import time
 from pathlib import Path
 
@@ -81,33 +82,44 @@ def run_clustering(store: ResultStore, cfg: dict, cache_path: Path,
 
     H_std_all, mean, std = standardize_with_discovery_stats(features, is_disc)
     Hs_disc = H_std_all[is_disc]
+    resumed = store.is_done(cond, ("clusters",))
 
-    t0 = time.time()
-    ph = phate.PHATE(n_components=10, random_state=PHATE_SEED, n_pca=100,
-                     verbose=False, n_jobs=n_jobs)
-    emb = ph.fit_transform(Hs_disc)
-    t_phate = time.time() - t0
+    if resumed:
+        # PHATE + k-means already ran in this run-id and their assignment
+        # shard exists (e.g., a later composition step failed); rebuild the
+        # cluster vectors from the stored rows instead of recomputing.
+        cluster_of = load_cluster_assignments(store, cfg)
+        disc_cluster = cluster_of[disc_idx]
+        eval_cluster = cluster_of[eval_idx]
+        t_phate = t_kmeans = float("nan")
+        rows = None  # assignments live in the stored shard; nothing to return
+    else:
+        t0 = time.time()
+        ph = phate.PHATE(n_components=10, random_state=PHATE_SEED, n_pca=100,
+                         verbose=False, n_jobs=n_jobs)
+        emb = ph.fit_transform(Hs_disc)
+        t_phate = time.time() - t0
 
-    km = KMeans(n_clusters=cfg["n_clusters"], n_init=50,
-                random_state=KMEANS_SEED)
-    disc_cluster = km.fit_predict(emb)
-    t_kmeans = time.time() - t0 - t_phate
+        km = KMeans(n_clusters=cfg["n_clusters"], n_init=50,
+                    random_state=KMEANS_SEED)
+        disc_cluster = km.fit_predict(emb)
+        t_kmeans = time.time() - t0 - t_phate
 
-    eval_cluster = route_eval_to_clusters(Hs_disc, disc_cluster,
-                                          H_std_all[is_eval])
+        eval_cluster = route_eval_to_clusters(Hs_disc, disc_cluster,
+                                              H_std_all[is_eval])
 
-    rows = []
-    for i, ci in enumerate(disc_idx):
-        rows.append({"image_index": int(ci), "cluster": int(disc_cluster[i]),
-                     "true_class": int(labels[ci]),
-                     "split": "discovery",
-                     "assignment_method": "phate10d_kmeans_fit"})
-    for i, ci in enumerate(eval_idx):
-        rows.append({"image_index": int(ci), "cluster": int(eval_cluster[i]),
-                     "true_class": int(labels[ci]),
-                     "split": "evaluation",
-                     "assignment_method": ASSIGNMENT_METHOD})
-    store.write(cond, "clusters", rows)
+        rows = []
+        for i, ci in enumerate(disc_idx):
+            rows.append({"image_index": int(ci), "cluster": int(disc_cluster[i]),
+                         "true_class": int(labels[ci]),
+                         "split": "discovery",
+                         "assignment_method": "phate10d_kmeans_fit"})
+        for i, ci in enumerate(eval_idx):
+            rows.append({"image_index": int(ci), "cluster": int(eval_cluster[i]),
+                         "true_class": int(labels[ci]),
+                         "split": "evaluation",
+                         "assignment_method": ASSIGNMENT_METHOD})
+        store.write(cond, "clusters", rows)
 
     # composition + size rows (F2: actual per-cluster sizes, written before
     # any systematic table is computed)
@@ -136,15 +148,24 @@ def run_clustering(store: ResultStore, cfg: dict, cache_path: Path,
             "cluster": c, "n_discovery": int(len(d_members)),
             "n_evaluation": int(len(e_members)),
         })
-    store.write(cond, "cluster_composition", comp_rows)
-    store.write(cond, "cluster_sizes", size_rows)
+    if not store.is_done(cond, ("cluster_composition", "cluster_sizes")):
+        store.write(cond, "cluster_composition", comp_rows)
+        store.write(cond, "cluster_sizes", size_rows)
 
-    np.savez_compressed(
-        config.RAW_DIR / "imagenet" / "cluster_artifacts.npz",
-        centroids=km.cluster_centers_, embedding=emb.astype(np.float32),
-        disc_cluster=disc_cluster.astype(np.int16),
-        eval_cluster=eval_cluster.astype(np.int16),
-        phate_runtime_s=t_phate, kmeans_runtime_s=t_kmeans)
+    if resumed:
+        np.savez_compressed(
+            config.RAW_DIR / "imagenet" / "cluster_artifacts.npz",
+            disc_cluster=disc_cluster.astype(np.int16),
+            eval_cluster=eval_cluster.astype(np.int16),
+            phate_runtime_s=t_phate, kmeans_runtime_s=t_kmeans,
+            resumed_from_shard=True)
+    else:
+        np.savez_compressed(
+            config.RAW_DIR / "imagenet" / "cluster_artifacts.npz",
+            centroids=km.cluster_centers_, embedding=emb.astype(np.float32),
+            disc_cluster=disc_cluster.astype(np.int16),
+            eval_cluster=eval_cluster.astype(np.int16),
+            phate_runtime_s=t_phate, kmeans_runtime_s=t_kmeans)
     dist = size_distribution_report(size_rows)
     info = {"n_discovery": int(is_disc.sum()), "n_evaluation": int(is_eval.sum()),
             "phate_runtime_s": t_phate, "kmeans_runtime_s": t_kmeans,
