@@ -227,4 +227,26 @@ __pycache__/
 /ablation_data/
 /ablation_data_v2/
 /benchmark_results/
-/outputs/
+
+# exp5-port: keep the committed pipeline artifacts (small text/parquet tables,
+# run metadata, and the shared-structure npzs), exclude the heavy regenerable
+# caches. Negation first at every directory level, then narrow per stage.
+outputs/**
+!outputs/**/
+!outputs/summaries/*.csv
+!outputs/summaries/*.parquet
+!outputs/logs/imagenet_run_report.txt
+!outputs/logs/imagenet_run_id.json
+!outputs/configs/*.json
+outputs/raw/imagenet/*
+!outputs/raw/imagenet/*.parquet
+!outputs/raw/imagenet/*.cache_meta.json
+!outputs/raw/imagenet/verify_report.json
+!outputs/raw/imagenet/eval_cohorts.npz
+!outputs/raw/imagenet/cluster_artifacts.npz
+!outputs/raw/imagenet/cluster_size_distribution.json
+outputs/raw/imagenet/corex_fits/
+outputs/raw/imagenet/classwise_shifts/
+outputs/raw/imagenet/*.npz
+!outputs/raw/imagenet/eval_cohorts.npz
+!outputs/raw/imagenet/cluster_artifacts.npz

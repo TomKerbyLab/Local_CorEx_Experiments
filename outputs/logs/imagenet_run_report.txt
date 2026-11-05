@@ -1,0 +1,46 @@
+Run: imagenet.7caecff243.0
+Successful conditions: 1
+Failed conditions: 0
+stages: cache,verify,splits
+stage_results: {"run_id": "imagenet.7caecff243.0", "cache": {"cached": false, "runtime_s": 40.20876622200012, "meta": {"cache_path": "/yunity/tkerby2/claude_experiments/Local_CorEx_Experiments/.claude/worktrees/exp5-port/outputs/raw/imagenet/resnet18_imagenet_val_cache.npz", "n_images": 50000, "model": "torchvision.models.resnet18", "weights": "IMAGENET1K_V1", "weights_sha256": "f37072fd47e89c5e827621c5baffa7500819f7896bbacec160b1a16c560e07ec", "torch": "2.12.0+cu130", "torchvision": "0.27.0+cu130", "device": "cuda:0", "batch_size": 256, "preprocess": {"resize": 256, "center_crop": 224, "mean": [0.485, 0.456, 0.406], "std": [0.229, 0.224, 0.225], "interpolation": "bilinear (torchvision default for Resize)"}, "forward_runtime_s": 32.56792235374451, "dataset_fingerprint": {"n_images": 50000, "n_classes": 1000, "labels_sha256": "8771f37f189dd18f01809bbd41174866fa60e0ef06ecb34fd2b9c52c5e757221", "hf_cache_dir": "/yunity/tkerby2/.cache/huggingface/hub/datasets--imagenet-1k", "ds_fingerprint": "17fbfacf86afc1ed"}, "integrity": {"n_images": 50000, "n_classes": 1000, "n_classes_wrong_count": 0, "bad_classes": []}}}, "verify": {"cached": false, "report": {"n_check": 2000, "n_per_class": 2, "atol": 0.0001, "max_feature_absdiff": 4.3392181396484375e-05, "mean_feature_absdiff": 1.62389846991573e-06, "max_logit_absdiff": 3.62396240234375e-05, "mean_logit_absdiff": 3.690623316288111e-06, "frac_logit_within_atol": 1.0, "frac_feature_within_atol": 1.0, "label_match_rate": 1.0, "verified": true, "runtime_s": 17.204392433166504}}, "splits": {"n_rows": 50000}}
+Run: imagenet.7caecff243.0
+Successful conditions: 0
+Failed conditions: 0
+stage: cluster_size_distribution (F2, written before any systematic table)
+distribution: {"discovery": {"n_clusters": 100, "min": 17, "max": 1669, "mean": 250.0, "deciles": {"p0": 17, "p10": 43, "p20": 74, "p30": 88, "p40": 134, "p50": 161, "p60": 228, "p70": 272, "p80": 354, "p90": 494, "p100": 1669}, "n_below_50": null}, "evaluation": {"n_clusters": 100, "min": 14, "max": 1756, "mean": 250.0, "deciles": {"p0": 14, "p10": 39, "p20": 70, "p30": 84, "p40": 118, "p50": 172, "p60": 231, "p70": 283, "p80": 353, "p90": 543, "p100": 1756}, "n_below_50": 14}}
+Run: imagenet.7caecff243.0
+Successful conditions: 1
+Failed conditions: 0
+stages: clusters
+stage_results: {"run_id": "imagenet.7caecff243.0", "clusters": {"n_discovery": 25000, "n_evaluation": 25000, "phate_runtime_s": NaN, "kmeans_runtime_s": NaN, "assignment_method": "nearest_discovery_neighbor_std512", "low_sample_clusters": [21, 22, 30, 39, 41, "..."]}}
+Run: imagenet.7caecff243.0
+Successful conditions: 1
+Failed conditions: 0
+stages: fits
+stage_results: {"run_id": "imagenet.7caecff243.0", "fits": {"runtime_s": 132.7749445438385, "n_clusters": 100}}
+Run: imagenet.7caecff243.0
+Successful conditions: 0
+Failed conditions: 0
+stage: cluster_size_distribution (F2, written before any systematic table)
+distribution: {"discovery": {"n_clusters": 100, "min": 17, "max": 1669, "mean": 250.0, "deciles": {"p0": 17, "p10": 43, "p20": 74, "p30": 88, "p40": 134, "p50": 161, "p60": 228, "p70": 272, "p80": 354, "p90": 494, "p100": 1669}, "n_below_50": null}, "evaluation": {"n_clusters": 100, "min": 14, "max": 1756, "mean": 250.0, "deciles": {"p0": 14, "p10": 39, "p20": 70, "p30": 84, "p40": 118, "p50": 172, "p60": 231, "p70": 283, "p80": 353, "p90": 543, "p100": 1756}, "n_below_50": 14}}
+Run: imagenet.7caecff243.0
+Successful conditions: 0
+Failed conditions: 0
+stage: low_sample_clusters (<50 evaluation images)
+n_low_sample: 14
+clusters: [21, 22, 30, 39, 41, 53, 59, 69, 78, 83, 85, 87, 90, 95]
+Run: imagenet.7caecff243.0
+Successful conditions: 2101
+Failed conditions: 0
+stages: ablations
+stage_results: {"run_id": "imagenet.7caecff243.0", "ablations": {"n_cells": 300, "runtime_s": 37.549469232559204, "n_low_sample_clusters": 14, "low_sample_clusters": [21, 22, 30, 39, 41, "..."]}}
+Run: imagenet.7caecff243.0
+Successful conditions: 2143
+Failed conditions: 0
+stages: case_study
+stage_results: {"run_id": "imagenet.7caecff243.0", "case_study": {"selected_cluster": {"selected_cluster": 81, "n_discovery_images": 123, "n_african_grey_discovery": 1, "proportion": 0.008130081300813009, "rule": ">= 100 discovery images, max proportion of class 87 (n01817953), ties by count then lower id", "cluster_ids_run_specific": true, "uses_evaluation_data": false}, "n_secondary_rows": 20}}
+Run: imagenet.7caecff243.0
+Successful conditions: 2143
+Failed conditions: 0
+stages: summarize
+stage_results: {"run_id": "imagenet.7caecff243.0", "summarize": {"imagenet_split": "/yunity/tkerby2/claude_experiments/Local_CorEx_Experiments/.claude/worktrees/exp5-port/outputs/summaries/imagenet_split.csv", "imagenet_clusters": "/yunity/tkerby2/claude_experiments/Local_CorEx_Experiments/.claude/worktrees/exp5-port/outputs/summaries/imagenet_clusters.csv", "imagenet_cluster_composition": "/yunity/tkerby2/claude_experiments/Local_CorEx_Experiments/.claude/worktrees/exp5-port/outputs/summaries/imagenet_cluster_composition.csv", "imagenet_cluster_size_distribution": "/yunity/tkerby2/claude_experiments/Local_CorEx_Experiments/.claude/worktrees/exp5-port/outputs/summaries/imagenet_cluster_size_distribution.csv", "imagenet_factors": "/yunity/tkerby2/claude_experiments/Local_CorEx_Experiments/.claude/worktrees/exp5-port/outputs/summaries/imagenet_factors.csv", "imagenet_supports": "/yunity/tkerby2/claude_experiments/Local_CorEx_Experiments/.claude/worktrees/exp5-port/outputs/summaries/imagenet_supports.csv", "imagenet_ablation_summary": "/yunity/tkerby2/claude_experiments/Local_CorEx_Experiments/.claude/worktrees/exp5-port/outputs/summaries/imagenet_ablation_summary.csv", "imagenet_top_probability_shifts": "/yunity/tkerby2/claude_experiments/Local_CorEx_Experiments/.claude/worktrees/exp5-port/outputs/summaries/imagenet_top_probability_shifts.csv", "imagenet_top_probability_shifts_all_parquet": "/yunity/tkerby2/claude_experiments/Local_CorEx_Experiments/.claude/worktrees/exp5-port/outputs/summaries/imagenet_top_probability_shifts_all.parquet", "imagenet_systematic_lc_vs_random": "/yunity/tkerby2/claude_experiments/Local_CorEx_Experiments/.claude/worktrees/exp5-port/outputs/summaries/imagenet_systematic_lc_vs_random.csv", "imagenet_systematic_lc_vs_univariate": "/yunity/tkerby2/claude_experiments/Local_CorEx_Experiments/.claude/worktrees/exp5-port/outputs/summaries/imagenet_systematic_lc_vs_univariate.csv", "imagenet_localization_contrasts": "/yunity/tkerby2/claude_experiments/Local_CorEx_Experiments/.claude/worktrees/exp5-port/outputs/summaries/imagenet_localization_contrasts.csv", "imagenet_tc_magnitude": "/yunity/tkerby2/claude_experiments/Local_CorEx_Experiments/.claude/worktrees/exp5-port/outputs/summaries/imagenet_tc_magnitude.csv", "imagenet_dominant_class_concordance": "/yunity/tkerby2/claude_experiments/Local_CorEx_Experiments/.claude/worktrees/exp5-port/outputs/summaries/imagenet_dominant_class_concordance.csv", "imagenet_coverage": "/yunity/tkerby2/claude_experiments/Local_CorEx_Experiments/.claude/worktrees/exp5-port/outputs/summaries/imagenet_coverage.csv", "imagenet_case_study": "/yunity/tkerby2/claude_experiments/Local_CorEx_Experiments/.claude/worktrees/exp5-port/outputs/summaries/imagenet_case_study.csv", "imagenet_case_study_secondary_clusters": "/yunity/tkerby2/claude_experiments/Local_CorEx_Experiments/.claude/worktrees/exp5-port/outputs/summaries/imagenet_case_study_secondary_clusters.csv"}}

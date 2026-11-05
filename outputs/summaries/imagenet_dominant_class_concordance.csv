@@ -1,0 +1,2 @@
+statistic,mean,ci_low,ci_high,n_clusters,n_factors,git_commit
+frac_dominant_among_top5_decreased,0.3079710144927536,0.25,0.3659420289855073,92,282,3174605a9bbd718ac2458705e1d6d3c716c92a96
