@@ -1,0 +1,9 @@
+setup,arm,n_groups,n_matched,n_learned,matched_pair_f1,coverage_f1,n_reps
+disjoint,global M=5,[10],[5],[5],0.8800000000000001,0.44000000000000006,16
+disjoint,local stack,[10],[10],[10],1.0,1.0,16
+disjoint,global M=10,[10],[10],[10],0.90875,0.90875,16
+disjoint,local stack,[10],[10],[20],0.99625,0.99625,16
+nondisjoint,global M=5,[10],[5],[5],1.0,0.5,16
+nondisjoint,local stack,[10],[10],[10],1.0,1.0,16
+nondisjoint,global M=10,[10],[10],[10],0.6487499999999999,0.6487499999999999,16
+nondisjoint,local stack,[10],[10],[20],0.9924999999999999,0.9924999999999999,16
