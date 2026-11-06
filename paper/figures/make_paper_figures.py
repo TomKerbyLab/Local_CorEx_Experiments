@@ -517,14 +517,25 @@ def figure_6():
     ax = axes[0]
     xs = np.arange(3)
     w = 0.36
-    lv = [loc[(loc.threshold == 0.9) & (loc.layer == l)].T_max.mean()
-          for l in layers]
+
+    def loc_seed_err(col):
+        """Local-arm per-seed means (5 network seeds) -> mean and 2*SE."""
+        perseed = loc[loc.threshold == 0.9].groupby(
+            ["layer", "model_seed"])[col].mean().reset_index()
+        means, errs = [], []
+        for l in layers:
+            v = perseed[perseed.layer == l][col].to_numpy()
+            means.append(v.mean())
+            errs.append(2 * v.std(ddof=1) / np.sqrt(len(v)))
+        return np.array(means), np.array(errs)
+
+    lv, lv_err = loc_seed_err("T_max")
     gv = [gl[(gl.threshold == 0.9) & (gl.layer == l)].T_max.iloc[0]
           for l in layers]
     rv = [grnd[(grnd.threshold == 0.9) & (grnd.layer == l)].T_max.iloc[0]
           for l in layers]
-    ax.bar(xs - w / 2, lv, width=w, color=C["lc"], ec="0.2", lw=0.6,
-           label="local CorEx (20 fits)" if True else None)
+    ax.bar(xs - w / 2, lv, yerr=lv_err, width=w, color=C["lc"], ec="0.2",
+           lw=0.6, capsize=3, label="local CorEx (5 seeds)")
     ax.bar(xs + w / 2, gv, width=w, color=C["gl"], ec="0.2", lw=0.6,
            label="global CorEx (M = 10)")
     for i, l in enumerate(layers):
@@ -538,20 +549,20 @@ def figure_6():
     ax.set_xticks(xs)
     ax.set_xticklabels([layer_names[l] for l in layers], fontsize=7)
     ax.set_ylabel("T$_{max}$ (class-mean prediction TV,\nmax over input classes)")
-    ax.set_title("a  effect magnitude, q = 0.9", fontsize=9)
+    ax.set_title("a  effect magnitude, q = 0.9\n(local bars: per-seed $\\pm$2 SE)",
+                 fontsize=9)
     ax.legend(fontsize=6.4)
     ax.set_ylim(0, 0.9)
 
     # (b) H_input absolute at q = 0.9
     ax = axes[1]
-    lv = [loc[(loc.threshold == 0.9) & (loc.layer == l)].H_input.mean()
-          for l in layers]
+    lv, lv_err_h = loc_seed_err("H_input")
     gv = [gl[(gl.threshold == 0.9) & (gl.layer == l)].H_input.iloc[0]
           for l in layers]
     rv = [grnd[(grnd.threshold == 0.9) & (grnd.layer == l)].H_input.iloc[0]
           for l in layers]
-    ax.bar(xs - w / 2, lv, width=w, color=C["lc"], ec="0.2", lw=0.6,
-           label="local CorEx")
+    ax.bar(xs - w / 2, lv, yerr=lv_err_h, width=w, color=C["lc"], ec="0.2",
+           lw=0.6, capsize=3, label="local CorEx")
     ax.bar(xs + w / 2, gv, width=w, color=C["gl"], ec="0.2", lw=0.6,
            label="global CorEx (M = 10)")
     for i, l in enumerate(layers):
@@ -564,7 +575,8 @@ def figure_6():
     ax.set_xticks(xs)
     ax.set_xticklabels(["H1", "H2", "H3"])
     ax.set_ylabel("H$_{input}$ (lower = more\ninput-class-concentrated)")
-    ax.set_title("b  input-class concentration, q = 0.9", fontsize=9)
+    ax.set_title("b  input-class concentration, q = 0.9\n(local bars: per-seed $\\pm$2 SE)",
+                 fontsize=9)
     ax.legend(fontsize=6.4, loc="center right")
     ax.set_ylim(0, 1.08)
 

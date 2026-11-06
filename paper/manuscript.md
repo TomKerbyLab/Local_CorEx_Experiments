@@ -393,7 +393,11 @@ not explain the Linear CorEx parity result in panel (a).
 
 **Reconciliation of the two conventions (why (a) and (b) differ).** The
 candidate-factor pool and the best-match rule are *identical* (all
-learned factors; per-true-group best). Three settings differ: (i) the
+learned factors; per-true-group best), as are the nuisance settings
+entered (the core grids are single-nuisance, so no nuisance weighting
+arises) and the region handling (both keys include the region
+identifier; each true group belongs to exactly one region, so
+best-per-group is unaffected by it). Three settings differ: (i) the
 input-variant rows scored — for the continuous grid the Bio fits exist on
 two input variants and (b) scores the primary one (`binned_with_routing`,
 with the linear reference annotated as absolute scores), while (a) scores
@@ -616,8 +620,12 @@ computation, flagged in §A rather than improvised here.
 ![Figure 6 — local vs global, same measurements](figures/figure_6.png)
 
 **Figure 6 — local and global fits identify groups with different
-layer-dependent behavioral profiles (output-aware; global M = 10; error
-bars where present, ±2·SE as stored).**
+layer-dependent behavioral profiles (output-aware; global M = 10).**
+Local bars carry per-seed ±2·SE error bars (5 network seeds, per-seed
+means over the 20-cluster pool); the committed global-arm tables store
+only pooled means, so a matching global-side interval is not derivable
+from the committed files (its per-factor behavioral rows live in the
+uncommitted raw store — flagged §A).
 (a) Magnitude at q = 0.9 (T_max, class-mean TV): global factors produce
 **larger** effects than local factors at H1 (0.60 vs. 0.11) and H2
 (0.77 vs. 0.17), but at H3 exceed their size-matched random reference by
