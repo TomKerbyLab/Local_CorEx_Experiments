@@ -1,157 +1,93 @@
-**You are correct, and my earlier framing was too restrictive.** Dissertation-only results can form part of the journal article’s contribution even if they are publicly available in the dissertation. IEEE explicitly supports articles based on thesis or dissertation material, with appropriate citation. Material already published in the conference paper is treated separately: the journal submission should identify and substantively extend that publication. [IEEE Education Society](https://ieee-edusociety.org/publication/tlt/tlt-author-resources?utm_source=chatgpt.com)
+**I think the scientific direction is now settled.** This revision resolves several earlier concerns: the metric definitions are much clearer, the historical examples have appropriate provenance, and the EM diagnostic is correctly separated from the Linear CorEx result in the main text.
 
-For this manuscript, the distinction is:
+The remaining issues are specific enough to address without another broad restructuring. The most important ones concern scoring and aggregation.
 
-| Material | How we should treat it |
+**1. The Gaussian capacity explanation still leaves a denominator problem.**
+
+The draft now says that the pooled ground truth contains ten groups, making the \(M=10\) assignment square. But Figure 2c reports perfect recovery with only five global factors.
+
+Under one-to-one matching, five factors can cover at most five of ten targets. If unmatched targets receive zero and the score averages over all ten, the maximum would be 0.5.
+
+Therefore, we need to know:
+
+- Are these ten unique supports or ten region-specific group instances?
+- What happens to unmatched true groups at \(M=5\)?
+- Does the denominator change with the number of fitted factors?
+
+If the \(M=5\) score averages only the five matched groups, while \(M=10\) averages all ten, increasing the budget also changes the evaluation question. The decline could then partly reflect scoring rather than poorer fitting.
+
+**I would report coverage over a fixed ground-truth collection separately from precision over the learned collection.** The local/global comparison within a fixed budget may remain informative, but the explanation of the \(M=5\) to \(M=10\) decline needs this clarification.
+
+**2. The nonlinear primary calculation is improved, but the sensitivity calculation mixes input variants.**
+
+Computing Figure 3b from the result tables is a substantial improvement.
+
+However, in `_e2_paired()`, the grouping before `.max()` does not include `corex_input`, and the function does not first filter to one input variant. Since the draft says continuous Bio results contain two input variants, this can select the better variant separately for each true group.
+
+That produces a best-of-preprocessing score, rather than the performance of one configured method. This is a more consequential difference than ordinary averaging across conditions.
+
+I would have Claude:
+
+- Filter to the primary input variant before matching, or plot each variant separately.
+- Preserve the region and other condition identifiers, with explicit checks where identifiers are redundant.
+- Filter by generator in `_e2_frozen()` as well. Currently, its generator names label the outputs without explicitly filtering the input tables by generator. That is harmless only if each table contains exactly one generator.
+
+After that, use the primary configuration consistently in the main comparison. Alternative preprocessing can remain a clearly labeled sensitivity analysis.
+
+**3. The neural comparison now states its limitations honestly, but the missing analysis should be completed.**
+
+Figure 6 supports an interesting descriptive result: global factors have stronger effects and greater input-class concentration at H1/H2, while local factors retain larger effects at H3.
+
+The remaining matched-cardinality comparison directly addresses the paper’s central neural question. I would complete that before finalizing the Results:
+
+- Use common support sizes or layer fractions.
+- Evaluate local and global selections on the same measurements.
+- Average factors and clusters within each network seed.
+- Compare the methods using the five paired seed-level results.
+
+The uncertainty description also remains muddled. “Five-seed aggregate” and a pool of seed, cluster, factor, and intervention rows describe different replication units. Labeling pooled error bars as “scale indicators” does not resolve that distinction.
+
+For primary MNIST comparisons, I would show the five seed values and their paired mean difference, with an interval calculated across seeds. The global raw store should supply the corresponding seed-level summaries. Exporting those summaries is a data-preservation task, rather than an inherent limitation of the experiment.
+
+One useful simplification: **discovery images do not necessarily need to be excluded from classifier training.** The essential separation for this analysis is between factor selection and intervention evaluation. Confirm and describe the actual overlap accurately; classifier-training overlap alone would not invalidate an independently evaluated test-set analysis.
+
+**4. Connect the corrected ImageNet calculation to the figures.**
+
+The pairing checker is useful, but the attached code does not show the complete connection:
+
+- `check_e5_pairing_fix.py` writes corrected tables under `outputs/e5_pairing_check/`.
+- Figure 8 reads tables under `outputs/summaries/`.
+
+The canonical tables may have been updated elsewhere, but that step is not visible here. Make the corrected calculation the source of the plotted summaries and regenerate the figure. Unchanged rounded results are a reassuring verification outcome; the reproducible pipeline should still use the corrected calculation.
+
+The checker should also verify that every eligible Local CorEx row has the expected matching controls. At present, missing matches are skipped before a Series is constructed using the full Local CorEx index.
+
+**5. Several statements still disagree with the displayed results.**
+
+These are straightforward fixes, but they matter because they affect the story.
+
+| Location | Correction |
 |---|---|
-| Results already in MLSP | Prior published work that the journal article extends. |
-| Dissertation results absent from other publications | Eligible content for their first journal publication, with dissertation attribution. |
-| New experiments and analyses | Further contributions that strengthen the journal article. |
+| Gaussian caption | The nondisjoint gain is **not largest at \(\alpha=0\)**. At \(n=50\), the displayed gains are approximately 0.02, 0.20, and 0.25 as separation increases. |
+| Gaussian interpretation | Sample-size effects are especially apparent at \(\alpha=0\); at larger separation, nondisjoint gains are roughly stable around 0.20. |
+| Abstract | “Remaining failures in optimization, not expressiveness” still exceeds the scoped EM diagnostic. Restrict that conclusion to the tested EM configuration. |
+| Figure 5d description | The stated +0.006 to +0.016 flip-rate range describes approximately \(q=0.9\), rather than the entire threshold grid. Express these as **0.6 to 1.6 percentage points at \(q=0.9\)**. |
+| E3 | “Ω estimates to ≈0.01 bits” appears to mean estimation **error** of approximately 0.01 bits. State the error measure explicitly. |
 
-Therefore, **ImageNet can legitimately be part of the journal extension beyond MLSP**. My recommendation to emphasize its systematic evaluation remains useful scientifically, but we do not need to establish novelty relative to everything in your dissertation. The introduction currently overcorrects by repeatedly positioning the manuscript as an extension beyond both documents.
+The new flip-rate panel is particularly helpful. It lets readers distinguish large shifts for an affected class from more modest changes across individual predictions. Specify the population over which that flip rate is averaged.
 
-**The revision is substantially improved, and I would keep its overall direction.** It now presents a more credible account of the mixed results:
+**The writing should now become more reader-facing.**
 
-- The Gaussian displays expose the conditions behind the averages.
-- The ImageNet univariate comparison has the correct interpretation.
-- Behavioral effects and interaction type are clearly separated.
-- The local/global comparison now includes concentration and support size.
-- The qualitative examples restore some intuition for what the method finds.
+The manuscript still contains much of the review process: publication-eligibility discussion, “account-of-record” language, frozen-convention labels, unresolved storage details, and statements about what each revision corrected.
 
-The next revision should focus on scientific consistency and a few targeted analyses, rather than another broad restructuring.
+Those are useful project records. The article itself should explain the method, experimental choices, and findings directly. A brief attribution paragraph can cover the conference paper and dissertation.
 
-**1. The nonlinear experiment still needs reconciliation before it can carry headline claims.**
+I would also simplify the figures:
 
-Figure 3a recomputes results from the match tables, while Figure 3b retains hard-coded numbers from a “frozen primary convention.” The appendix acknowledges that the two approaches disagree in their absolute results.
+- Center the Gaussian difference heatmaps at zero.
+- Add a clear true-region/PHATE legend to Figure 3a.
+- Shorten the panel titles and move qualifications into captions.
+- Show discovery and evaluation as distinct parts of Figure 1.
+- Reduce Figure 7 to the strongest worked example, or move the larger historical montage to the supplement.
 
-Labeling one analysis frozen does not explain the discrepancy. We need an explicit account of what differs:
-
-- Which estimator and conditions enter each summary?
-- Which candidate factors are eligible?
-- Are nuisance settings, groups, and regions weighted identically?
-- Is the difference caused by matching, filtering, or aggregation?
-
-Figure 3b still lacks an estimator label, despite the stated intention to label every headline result.
-
-I would ask Claude to produce one reproducible calculation for the primary results and a clearly defined sensitivity analysis. Both can remain, but readers should be able to understand why their numbers differ. Agreement in direction alone is insufficient reconciliation.
-
-There is also an important interpretation problem: **the EM capability diagnostic does not explain the Linear CorEx parity result.** The diagnostic concerns an EM-fitted model, while Linear CorEx uses a different fitting procedure.
-
-The observation that PHATE partitions help Linear CorEx while the true-region partition does not is interesting. One possible explanation is that PHATE conditioning creates locally pairwise-visible structure within otherwise pairwise-invisible populations. Other explanations could involve factor selection or scoring. The current evidence does not establish the cause.
-
-I would report that pattern directly and reserve the EM explanation for the estimator actually tested by that diagnostic.
-
-**2. The behavioral metric definitions are clearer, but the figures and prose still contradict them.**
-
-The methods now define approximately:
-
-\[
-\Delta_{y,c}
-=
-\mathbb{E}\!\left[p^{S}_{c}(X)-p_c(X)\mid Y=y\right],
-\qquad
-T_y=\frac12\sum_c|\Delta_{y,c}|,
-\qquad
-T_{\max}=\max_y T_y.
-\]
-
-Thus, \(T_{\max}\) is the **largest total-variation distance between class-mean prediction vectors across input classes**.
-
-It is neither a maximum over individual output coordinates nor a quantity measured in bits. Consequently:
-
-- Figure 1’s “max per-output-class probability change” needs correction.
-- Figure 6’s “bits of class-mean shift” is incorrect.
-- The abstract’s closing description of concentration “across output classes” does not describe \(H_{\text{input}}\).
-
-This distinction matters scientifically. Taking the distance between average prediction vectors allows opposing image-level changes to cancel. Small class-mean shifts therefore support a statement about this aggregate measurement, rather than establishing that random deletion is “behaviorally inert.” Flip rates or image-level distances can supply the complementary evidence already collected.
-
-**3. The local/global figure is much better, but support size has been displayed rather than controlled.**
-
-Figure 6 now reveals a more interesting result than the original “potent but blunt” account:
-
-- Global factors have larger effects and greater input-class concentration at H1/H2.
-- Local factors retain substantially larger effects at H3.
-- Global and local supports differ in size.
-
-That is a useful finding. However, placing support-size curves beside the results does not make the comparison size-controlled. The text should say that size differences are **reported explicitly**, unless an additional adjustment or matched-size analysis was performed.
-
-The highest-value remaining analysis would compare the methods at common support cardinalities or layer fractions, using the same measurements and seed-level aggregation. That could use the existing factors and cached activations.
-
-Two conclusions also remain too strong:
-
-- “Global … carries no H3 structure” overstates a result that still exceeds random deletion by approximately 0.03.
-- Unchanged top-five explained TC at \(M=100\) establishes unchanged top-five explained TC. It does not establish unchanged recovered structure or behavioral usefulness, since neural ground-truth groups are unavailable.
-
-I would retain the conclusion about **different layer-dependent behavioral profiles**, with uncertainty shown for the direct comparison.
-
-**4. The proposed explanation for the Gaussian capacity result is incomplete.**
-
-The revision attributes the global decline from \(M=5\) to \(M=10\) to additional partial or degenerate factors matching poorly.
-
-That explanation depends on the scoring rule. If five correct factors remain available, adding poor candidate factors cannot reduce optimal one-to-one coverage of a fixed set of true groups: the matching can ignore the extras.
-
-A decline could arise because:
-
-- Refitting changes or loses the previously good factors.
-- Ranking or truncation excludes useful factors.
-- The reported score penalizes unmatched predicted factors.
-- The matching target or aggregation changes.
-
-Claude should identify which mechanism actually applies. The current account describes a plausible association, but does not yet demonstrate the scoring mechanism.
-
-The heatmaps also show that gains do **not** uniformly grow with sample size or mean separation. The strongest general pattern is the difference between covariance regimes. The introduction should describe sample-size and separation effects conditionally.
-
-Finally, call the oracle a **true-region reference partition**, rather than a general upper bound. The nonlinear results themselves demonstrate that an estimated partition can outperform it for a particular estimator.
-
-**5. The restored examples need their own experimental provenance.**
-
-Restoring examples was helpful, but Figure 7 comes from an earlier analysis with a different setup. The dissertation describes a 200-dimensional MNIST hidden representation and partitioning of the test data. Local_CorEx_Dissertation.pdf
-
-The new benchmark uses 500/400/300 units and a discovery/evaluation split. The older examples therefore should not inherit the new section’s blanket statement that all selection occurred on data separate from evaluation.
-
-I would label them explicitly as **illustrative examples from the earlier analysis**, specifying the network and selection procedure. Reused conference panels should retain conference attribution as well.
-
-There are also two concrete caption errors:
-
-- Figure 7b describes the arrangement incorrectly. H1 is the left column and H2 the right column; factors occupy the rows.
-- Figure 7d calls the −0.91 change a *logit* drop while discussing conservation of probability mass. Logits and probabilities need distinct labels; probability conservation applies after normalization.
-
-Likewise, the newly explicit claim that the classifier never trained on the 10,000 discovery images should be checked against the actual checkpoint’s training indices. The prose is now unambiguous, provided it describes the run that produced the results.
-
-**6. The remaining analysis flags should be resolved before polishing the manuscript.**
-
-The appendix identifies a control summarizer that averages across thresholds instead of matching \(q=0.80\). That is an analysis correction, even if it changes only a few rows.
-
-I would fix the pairing keys, regenerate the affected summaries, and document whether the conclusions change. This should not require retraining networks or refitting CorEx.
-
-Similarly, replacing the impossible owl statement with “freed mass returns diffusely” is an improvement, but the detailed redistribution claim still needs verification from the saved probability vectors. Conservation guarantees that mass returns somewhere; it does not establish its distribution.
-
-The plotting code also uses several uncertainty conventions:
-
-- Figure 3a uses \(1.96\,SE\).
-- Figure 5 uses \(2\,SE\).
-- The methods describe t-based confidence intervals.
-
-Those should be reconciled and labeled, including whether uncertainty is calculated across network seeds, synthetic replicates, or another unit.
-
-**7. A few conceptual statements still need correction.**
-
-The background currently attaches the KL-divergence definition to explained TC. The definitions should be separated:
-
-\[
-TC(X)=D_{\mathrm{KL}}\!\left(p_X\,\middle\|\,\prod_i p_{X_i}\right),
-\qquad
-TC(X;Z)=TC(X)-TC(X\mid Z).
-\]
-
-Figure 4’s “fails loudly” description is also misleading. An accurate O-information calculation on an incorrectly recovered support can return a value near zero without warning the analyst that important variables were missed. That is precisely the useful limitation this experiment demonstrates. I would describe it as **the effect of support-recovery error on subsequent characterization**.
-
-Finally, “piecewise linear” applies to the local Linear CorEx configuration. It does not establish general robustness to nonlinear dependence, and it should not describe every CorEx estimator.
-
-**The story I would now carry forward**
-
-The revision supports a coherent account: informative partitioning improves recovery of heterogeneous dependence groups; nonlinear success depends on both partitioning and the estimator; and neural applications reveal consequential groups whose advantages over simpler selection vary across layers and measurements.
-
-That accommodates the strong Gaussian results, the H3 finding, and the competitive ImageNet univariate baseline without forcing a universal superiority claim.
-
-I would keep E3 compact, retain one clearly contextualized worked example, and resolve the analysis issues above before drafting the final abstract. The most useful additional computation is the direct comparison at common support sizes. A simple grouping baseline would be the next priority if we decide further evidence is needed.
+**My recommended next pass is tightly scoped:** clarify the Gaussian scoring denominator, separate the nonlinear input variants, complete the paired comparison at common support sizes, and connect the corrected ImageNet summaries to the figures. The introduction and methods can begin moving into Overleaf while those checks are completed. I would keep the present datasets and estimators fixed for this pass.
